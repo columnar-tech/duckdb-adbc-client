@@ -1,10 +1,10 @@
-# DuckdbAdbcClient
+# Quack
 
 This repository is based on https://github.com/duckdb/extension-template, check it out if you want to build and ship your own DuckDB extension.
 
 ---
 
-This extension, DuckdbAdbcClient, allow you to ... <extension_goal>.
+This extension, Quack, allow you to ... <extension_goal>.
 
 
 ## Building
@@ -26,23 +26,23 @@ The main binaries that will be built are:
 ```sh
 ./build/release/duckdb
 ./build/release/test/unittest
-./build/release/extension/duckdb_adbc_client/duckdb_adbc_client.duckdb_extension
+./build/release/extension/quack/quack.duckdb_extension
 ```
 - `duckdb` is the binary for the duckdb shell with the extension code automatically loaded.
 - `unittest` is the test runner of duckdb. Again, the extension is already linked into the binary.
-- `duckdb_adbc_client.duckdb_extension` is the loadable binary as it would be distributed.
+- `quack.duckdb_extension` is the loadable binary as it would be distributed.
 
 ## Running the extension
 To run the extension code, simply start the shell with `./build/release/duckdb`.
 
-Now we can use the features from the extension directly in DuckDB. The template contains a single scalar function `duckdb_adbc_client()` that takes a string arguments and returns a string:
+Now we can use the features from the extension directly in DuckDB. The template contains a single scalar function `quack()` that takes a string arguments and returns a string:
 ```
-D select duckdb_adbc_client('Jane') as result;
+D select quack('Jane') as result;
 ┌───────────────┐
 │    result     │
 │    varchar    │
 ├───────────────┤
-│ DuckdbAdbcClient Jane 🐥 │
+│ Quack Jane 🐥 │
 └───────────────┘
 ```
 
@@ -81,8 +81,8 @@ DuckDB. To specify a specific version, you can pass the version instead.
 
 After running these steps, you can install and load your extension using the regular INSTALL/LOAD commands in DuckDB:
 ```sql
-INSTALL duckdb_adbc_client;
-LOAD duckdb_adbc_client;
+INSTALL quack;
+LOAD quack;
 ```
 
 ## Setting up CLion
@@ -100,3 +100,4 @@ To set up debugging in CLion, there are two simple steps required. Firstly, in `
 ```
 
 The second step is to configure the unittest runner as a run/debug configuration. To do this, go to `Run -> Edit Configurations` and click `+ -> Cmake Application`. The target and executable should be `unittest`. This will run all the DuckDB tests. To specify only running the extension specific tests, add `--test-dir ../../.. [sql]` to the `Program Arguments`. Note that it is recommended to use the `unittest` executable for testing/development within CLion. The actual DuckDB CLI currently does not reliably work as a run target in CLion.
+

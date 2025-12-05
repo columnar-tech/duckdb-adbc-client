@@ -18,7 +18,7 @@ jobs:
     with:
       duckdb_version: v1.4.2
       ci_tools_version: v1.4.2
-      extension_name: duckdb_adbc_client
+      extension_name: adbc
 
   code-quality-check:
     name: Code Quality Check
@@ -26,5 +26,5 @@ jobs:
     with:
       duckdb_version: v1.4.2
       ci_tools_version: v1.4.2
-      extension_name: duckdb_adbc_client
+      extension_name: adbc
       format_checks: 'format;tidy'
