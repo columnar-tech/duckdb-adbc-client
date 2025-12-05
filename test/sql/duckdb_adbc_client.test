@@ -1,0 +1,23 @@
+# name: test/sql/duckdb_adbc_client.test
+# description: test duckdb_adbc_client extension
+# group: [sql]
+
+# Before we load the extension, this will fail
+statement error
+SELECT duckdb_adbc_client('Sam');
+----
+Catalog Error: Scalar Function with name duckdb_adbc_client does not exist!
+
+# Require statement will ensure this test is run with this extension loaded
+require duckdb_adbc_client
+
+# Confirm the extension works
+query I
+SELECT duckdb_adbc_client('Sam');
+----
+DuckdbAdbcClient Sam 🐥
+
+query I
+SELECT duckdb_adbc_client_openssl_version('Michael') ILIKE 'DuckdbAdbcClient Michael, my linked OpenSSL version is OpenSSL%';
+----
+true
