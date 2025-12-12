@@ -15,47 +15,106 @@
 namespace duckdb {
 namespace adbc {
 
+class AdbcDatabaseWrapper {
+public:
+	AdbcDatabaseWrapper() = default;
+	~AdbcDatabaseWrapper() {
+		AdbcError error;
+		if (created) {
+			AdbcDatabaseRelease(&database, &error);
+		}
+	}
+
+	void Initialize(const string &uri) {
+		// TODO: Remove the driver flag when it can be inferred from the URI
+		AdbcError error;
+		CHECK_ADBC(AdbcDatabaseNew(&database, &error), BinderException);
+		created = true;
+		CHECK_ADBC(AdbcDatabaseSetOption(&database, "driver", "postgresql", &error), BinderException);
+		CHECK_ADBC(AdbcDatabaseSetOption(&database, "uri", uri.c_str(), &error), BinderException);
+		CHECK_ADBC(AdbcDatabaseInit(&database, &error), BinderException);
+	}
+
+	AdbcDatabase *get() {
+		return &database;
+	}
+
+private:
+	AdbcDatabase database = {};
+	bool created = false;
+};
+
+class AdbcConnectionWrapper {
+public:
+	AdbcConnectionWrapper() = default;
+	~AdbcConnectionWrapper() {
+		AdbcError error;
+		if (created) {
+			AdbcConnectionRelease(&connection, &error);
+		}
+	}
+
+	void Initialize(AdbcDatabase *database) {
+		AdbcError error;
+		CHECK_ADBC(AdbcConnectionNew(&connection, &error), BinderException);
+		created = true;
+		CHECK_ADBC(AdbcConnectionInit(&connection, database, &error), BinderException);
+	}
+
+	AdbcConnection *get() {
+		return &connection;
+	}
+
+private:
+	AdbcConnection connection = {};
+	bool created = false;
+};
+
+class AdbcStatementWrapper {
+public:
+	AdbcStatementWrapper() = default;
+	~AdbcStatementWrapper() {
+		AdbcError error;
+		if (created) {
+			AdbcStatementRelease(&statement, &error);
+		}
+	}
+
+	void Initialize(AdbcConnection *connection, const string &query_text) {
+		AdbcError error;
+		CHECK_ADBC(AdbcStatementNew(connection, &statement, &error), BinderException);
+		created = true;
+		CHECK_ADBC(AdbcStatementSetSqlQuery(&statement, query_text.c_str(), &error), BinderException);
+	}
+
+	AdbcStatement *get() {
+		return &statement;
+	}
+
+private:
+	AdbcStatement statement = {};
+	bool created = false;
+};
+
 // A factory class that holds the ADBC connection state and produces ArrowArrayStreamWrapper instances
-struct AdbcArrowStreamFactory {
-
-	AdbcArrowStreamFactory(string uri, string query_text)
-	    : database(make_uniq<AdbcDatabase>()), connection(make_uniq<AdbcConnection>()),
-	      statement(make_uniq<AdbcStatement>()) {
-
-		AdbcError error = {};
-
-		// Create the database instance (TODO: Remove the driver flag when it can be inferred from the URI)
-		CHECK_ADBC(AdbcDatabaseNew(database.get(), &error), BinderException);
-		CHECK_ADBC(AdbcDatabaseSetOption(database.get(), "driver", "postgresql", &error), BinderException);
-		CHECK_ADBC(AdbcDatabaseSetOption(database.get(), "uri", uri.c_str(), &error), BinderException);
-		CHECK_ADBC(AdbcDatabaseInit(database.get(), &error), BinderException);
-
-		// Create the ADBC connection
-		CHECK_ADBC(AdbcConnectionNew(connection.get(), &error), BinderException);
-		CHECK_ADBC(AdbcConnectionInit(connection.get(), database.get(), &error), BinderException);
-
-		// Create the ADBC statement
-		CHECK_ADBC(AdbcStatementNew(connection.get(), statement.get(), &error), BinderException);
-		CHECK_ADBC(AdbcStatementSetSqlQuery(statement.get(), query_text.c_str(), &error), BinderException);
+class AdbcArrowStreamFactory {
+public:
+	AdbcArrowStreamFactory(const string &uri, const string &query_text) : owned_uri(uri), owned_query_text(query_text) {
+		database.Initialize(owned_uri);
+		connection.Initialize(database.get());
+		statement.Initialize(connection.get(), owned_query_text);
 	}
 
-	~AdbcArrowStreamFactory() {
-
-		AdbcError error = {};
-
-		// Release the ADBC statement
-		AdbcStatementRelease(statement.get(), &error);
-
-		// Release the ADBC connection
-		AdbcConnectionRelease(connection.get(), &error);
-
-		// Release the ADBC database
-		AdbcDatabaseRelease(database.get(), &error);
+	AdbcStatement *GetStatement() {
+		return statement.get();
 	}
 
-	unique_ptr<AdbcDatabase> database;
-	unique_ptr<AdbcConnection> connection;
-	unique_ptr<AdbcStatement> statement;
+private:
+	string owned_uri;
+	string owned_query_text;
+	AdbcDatabaseWrapper database = {};
+	AdbcConnectionWrapper connection = {};
+	AdbcStatementWrapper statement = {};
 };
 
 unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
@@ -66,7 +125,7 @@ unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, 
 	AdbcError error = {};
 	ArrowArrayStream adbc_stream = {};
 	int64_t rows_affected;
-	CHECK_ADBC(AdbcStatementExecuteQuery(factory->statement.get(), &adbc_stream, &rows_affected, &error), IOException);
+	CHECK_ADBC(AdbcStatementExecuteQuery(factory->GetStatement(), &adbc_stream, &rows_affected, &error), IOException);
 
 	// Create and return the wrapper owning the stream for DuckDB
 	auto wrapper = make_uniq<ArrowArrayStreamWrapper>();
@@ -87,7 +146,7 @@ public:
 
 		// Retrieve and register the schema information from ADBC with DuckDB
 		CHECK_ADBC(
-		    AdbcStatementExecuteSchema(adbc_arrow_stream_factory->statement.get(), &schema_root.arrow_schema, &error),
+		    AdbcStatementExecuteSchema(adbc_arrow_stream_factory->GetStatement(), &schema_root.arrow_schema, &error),
 		    BinderException);
 		ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table,
 		                                             schema_root.arrow_schema);
