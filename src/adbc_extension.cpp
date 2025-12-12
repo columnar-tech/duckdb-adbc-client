@@ -6,20 +6,26 @@
 #include "duckdb/function/scalar_function.hpp"
 #include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
 
+#include <duckdb/common/adbc/adbc.h>
+#include <duckdb/common/adbc/driver_manager.h>
+#include "duckdb/function/table/arrow.hpp"
+#include "adbc_scan.hpp"
+
 namespace duckdb {
 
-inline void DuckdbAdbcClientScalarFun(DataChunk &args, ExpressionState &state, Vector &result) {
-	auto &name_vector = args.data[0];
-	UnaryExecutor::Execute<string_t, string_t>(name_vector, result, args.size(), [&](string_t name) {
-		return StringVector::AddString(result, "Adbc " + name.GetString() + " 🐥");
-	});
-}
-
 static void LoadInternal(ExtensionLoader &loader) {
-	// Register a scalar function
-	auto adbc_scalar_function =
-	    ScalarFunction("adbc", {LogicalType::VARCHAR}, LogicalType::VARCHAR, DuckdbAdbcClientScalarFun);
-	loader.RegisterFunction(adbc_scalar_function);
+
+	// Construct a TableFunction which reads from ADBC given an input URI and SQL query
+	TableFunction read_adbc_function("read_adbc", {LogicalType::VARCHAR, LogicalType::VARCHAR}, // Input URI, SQL query
+	                                 ArrowTableFunction::ArrowScanFunction,                     // Use DuckDB's scan
+	                                 adbc::AdbcScanBindFunction,                                // Our bind function
+	                                 ArrowTableFunction::ArrowScanInitGlobal,                   // Use DuckDB's init
+	                                 ArrowTableFunction::ArrowScanInitLocal);                   // Use DuckDB's init
+
+	// Disable pushdown optimizations
+	read_adbc_function.projection_pushdown = false;
+	read_adbc_function.filter_pushdown = false;
+	loader.RegisterFunction(read_adbc_function);
 }
 
 void AdbcExtension::Load(ExtensionLoader &loader) {
@@ -36,7 +42,6 @@ std::string AdbcExtension::Version() const {
 	return "";
 #endif
 }
-
 } // namespace duckdb
 
 extern "C" {
