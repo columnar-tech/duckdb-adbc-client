@@ -99,10 +99,10 @@ private:
 // A factory class that holds the ADBC connection state and produces ArrowArrayStreamWrapper instances
 class AdbcArrowStreamFactory {
 public:
-	AdbcArrowStreamFactory(const string &uri, const string &query_text) {
-		database.Initialize(uri);
+	AdbcArrowStreamFactory(const string &uri, const string &query_text) : owned_uri(uri), owned_query_text(query_text) {
+		database.Initialize(owned_uri);
 		connection.Initialize(database.get());
-		statement.Initialize(connection.get(), query_text);
+		statement.Initialize(connection.get(), owned_query_text);
 	}
 
 	AdbcStatement *GetStatement() {
@@ -110,6 +110,8 @@ public:
 	}
 
 private:
+	string owned_uri;
+	string owned_query_text;
 	AdbcDatabaseWrapper database = {};
 	AdbcConnectionWrapper connection = {};
 	AdbcStatementWrapper statement = {};
