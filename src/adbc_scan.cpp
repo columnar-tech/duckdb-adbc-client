@@ -7,7 +7,11 @@
 		AdbcStatusCode status = (EXPR);                                                                                \
 		if (status != ADBC_STATUS_OK) {                                                                                \
 			if (error.message != nullptr) {                                                                            \
-				throw EXCEPTION_TYPE(error.message);                                                                   \
+				std::string msg_copy = error.message;                                                                  \
+				if (error.release) {                                                                                   \
+					error.release(&error);                                                                             \
+				}                                                                                                      \
+				throw EXCEPTION_TYPE(msg_copy);                                                                        \
 			}                                                                                                          \
 		}                                                                                                              \
 	} while (false)
@@ -19,7 +23,7 @@ class AdbcDatabaseWrapper {
 public:
 	AdbcDatabaseWrapper() = default;
 	~AdbcDatabaseWrapper() {
-		AdbcError error;
+		AdbcError error = {};
 		if (created) {
 			AdbcDatabaseRelease(&database, &error);
 		}
@@ -27,7 +31,7 @@ public:
 
 	void Initialize(const string &uri) {
 		// TODO: Remove the driver flag when it can be inferred from the URI
-		AdbcError error;
+		AdbcError error = {};
 		CHECK_ADBC(AdbcDatabaseNew(&database, &error), BinderException);
 		created = true;
 		CHECK_ADBC(AdbcDatabaseSetOption(&database, "driver", "postgresql", &error), BinderException);
@@ -48,14 +52,14 @@ class AdbcConnectionWrapper {
 public:
 	AdbcConnectionWrapper() = default;
 	~AdbcConnectionWrapper() {
-		AdbcError error;
+		AdbcError error = {};
 		if (created) {
 			AdbcConnectionRelease(&connection, &error);
 		}
 	}
 
 	void Initialize(AdbcDatabase *database) {
-		AdbcError error;
+		AdbcError error = {};
 		CHECK_ADBC(AdbcConnectionNew(&connection, &error), BinderException);
 		created = true;
 		CHECK_ADBC(AdbcConnectionInit(&connection, database, &error), BinderException);
@@ -74,14 +78,14 @@ class AdbcStatementWrapper {
 public:
 	AdbcStatementWrapper() = default;
 	~AdbcStatementWrapper() {
-		AdbcError error;
+		AdbcError error = {};
 		if (created) {
 			AdbcStatementRelease(&statement, &error);
 		}
 	}
 
 	void Initialize(AdbcConnection *connection, const string &query_text) {
-		AdbcError error;
+		AdbcError error = {};
 		CHECK_ADBC(AdbcStatementNew(connection, &statement, &error), BinderException);
 		created = true;
 		CHECK_ADBC(AdbcStatementSetSqlQuery(&statement, query_text.c_str(), &error), BinderException);
