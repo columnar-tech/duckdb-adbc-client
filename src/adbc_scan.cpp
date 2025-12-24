@@ -1,6 +1,8 @@
 #include "adbc_scan.hpp"
-#include "duckdb/common/adbc/adbc.hpp"
+#include "adbc-vendor/adbc.hpp"
+#include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/function/table/arrow.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
 
 #define CHECK_ADBC(EXPR, EXCEPTION_TYPE)                                                                               \
 	do {                                                                                                               \
@@ -19,6 +21,8 @@
 namespace duckdb {
 namespace adbc {
 
+using namespace Private;
+
 class AdbcDatabaseWrapper {
 public:
 	AdbcDatabaseWrapper() = default;
@@ -30,12 +34,11 @@ public:
 	}
 
 	void Initialize(const string &uri) {
-		// TODO: Remove the driver flag when it can be inferred from the URI
 		AdbcError error = {};
 		CHECK_ADBC(AdbcDatabaseNew(&database, &error), BinderException);
 		created = true;
-		CHECK_ADBC(AdbcDatabaseSetOption(&database, "driver", "postgresql", &error), BinderException);
 		CHECK_ADBC(AdbcDatabaseSetOption(&database, "uri", uri.c_str(), &error), BinderException);
+		CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(&database, ADBC_LOAD_FLAG_DEFAULT, &error), BinderException);
 		CHECK_ADBC(AdbcDatabaseInit(&database, &error), BinderException);
 	}
 
@@ -127,13 +130,13 @@ unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, 
 
 	// Create the stream for the query result
 	AdbcError error = {};
-	ArrowArrayStream adbc_stream = {};
+	Private::ArrowArrayStream adbc_stream = {};
 	int64_t rows_affected;
 	CHECK_ADBC(AdbcStatementExecuteQuery(factory->GetStatement(), &adbc_stream, &rows_affected, &error), IOException);
 
 	// Create and return the wrapper owning the stream for DuckDB
 	auto wrapper = make_uniq<ArrowArrayStreamWrapper>();
-	wrapper->arrow_array_stream = adbc_stream;
+	std::memcpy(&wrapper->arrow_array_stream, &adbc_stream, sizeof(Private::ArrowArrayStream));
 	wrapper->number_of_rows = rows_affected;
 	return wrapper;
 }
@@ -149,9 +152,10 @@ public:
 		AdbcError error = {};
 
 		// Retrieve and register the schema information from ADBC with DuckDB
-		CHECK_ADBC(
-		    AdbcStatementExecuteSchema(adbc_arrow_stream_factory->GetStatement(), &schema_root.arrow_schema, &error),
-		    BinderException);
+		CHECK_ADBC(AdbcStatementExecuteSchema(adbc_arrow_stream_factory->GetStatement(),
+		                                      reinterpret_cast<Private::ArrowSchema *>(&schema_root.arrow_schema),
+		                                      &error),
+		           BinderException);
 		ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table,
 		                                             schema_root.arrow_schema);
 	}

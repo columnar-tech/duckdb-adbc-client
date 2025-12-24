@@ -21,12 +21,10 @@
 /// same process.
 
 #pragma once
-
 #include <arrow-adbc/adbc.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C" {
 #endif
 
 #ifndef ADBC_DRIVER_MANAGER_H
@@ -34,14 +32,14 @@ extern "C" {
 
 typedef uint32_t AdbcLoadFlags;
 
-#define ADBC_LOAD_FLAG_SEARCH_ENV 1
-#define ADBC_LOAD_FLAG_SEARCH_USER 2
-#define ADBC_LOAD_FLAG_SEARCH_SYSTEM 4
+#define ADBC_LOAD_FLAG_SEARCH_ENV           1
+#define ADBC_LOAD_FLAG_SEARCH_USER          2
+#define ADBC_LOAD_FLAG_SEARCH_SYSTEM        4
 #define ADBC_LOAD_FLAG_ALLOW_RELATIVE_PATHS 8
 
-#define ADBC_LOAD_FLAG_DEFAULT                              \
-  (ADBC_LOAD_FLAG_SEARCH_ENV | ADBC_LOAD_FLAG_SEARCH_USER | \
-   ADBC_LOAD_FLAG_SEARCH_SYSTEM | ADBC_LOAD_FLAG_ALLOW_RELATIVE_PATHS)
+#define ADBC_LOAD_FLAG_DEFAULT                                                                                         \
+	(ADBC_LOAD_FLAG_SEARCH_ENV | ADBC_LOAD_FLAG_SEARCH_USER | ADBC_LOAD_FLAG_SEARCH_SYSTEM |                           \
+	 ADBC_LOAD_FLAG_ALLOW_RELATIVE_PATHS)
 
 /// \brief Common entry point for drivers via the driver manager.
 ///
@@ -60,8 +58,8 @@ typedef uint32_t AdbcLoadFlags;
 /// \param[out] error An optional location to return an error message
 ///   if necessary.
 ADBC_EXPORT
-AdbcStatusCode AdbcLoadDriver(const char* driver_name, const char* entrypoint,
-                              int version, void* driver, struct AdbcError* error);
+AdbcStatusCode AdbcLoadDriver(const char *driver_name, const char *entrypoint, int version, void *driver,
+                              struct AdbcError *error);
 
 /// \brief Common entry point to search for and load a driver or manifest.
 ///
@@ -106,10 +104,9 @@ AdbcStatusCode AdbcLoadDriver(const char* driver_name, const char* entrypoint,
 /// \param[out] driver The table of function pointers to initialize
 /// \param[out] error An optional location to return an error message
 ADBC_EXPORT
-AdbcStatusCode AdbcFindLoadDriver(const char* driver_name, const char* entrypoint,
-                                  const int version, const AdbcLoadFlags load_options,
-                                  const char* additional_search_path_list, void* driver,
-                                  struct AdbcError* error);
+AdbcStatusCode AdbcFindLoadDriver(const char *driver_name, const char *entrypoint, const int version,
+                                  const AdbcLoadFlags load_options, const char *additional_search_path_list,
+                                  void *driver, struct AdbcError *error);
 
 /// \brief Common entry point for drivers via the driver manager.
 ///
@@ -124,8 +121,8 @@ AdbcStatusCode AdbcFindLoadDriver(const char* driver_name, const char* entrypoin
 /// \param[out] error An optional location to return an error message
 ///   if necessary.
 ADBC_EXPORT
-AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int version,
-                                          void* driver, struct AdbcError* error);
+AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int version, void *driver,
+                                          struct AdbcError *error);
 
 /// \brief Set the AdbcDriverInitFunc to use.
 ///
@@ -135,9 +132,8 @@ AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func, int vers
 /// entrypoint explicitly, for applications that can dynamically
 /// load drivers on their own.
 ADBC_EXPORT
-AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase* database,
-                                                    AdbcDriverInitFunc init_func,
-                                                    struct AdbcError* error);
+AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase *database, AdbcDriverInitFunc init_func,
+                                                    struct AdbcError *error);
 
 /// \brief Set the load flags for the driver manager.
 ///
@@ -150,9 +146,8 @@ AdbcStatusCode AdbcDriverManagerDatabaseSetInitFunc(struct AdbcDatabase* databas
 /// If this function isn't called, the default load flags are just to
 /// allow relative paths, disallowing the lookups of manifests.
 ADBC_EXPORT
-AdbcStatusCode AdbcDriverManagerDatabaseSetLoadFlags(struct AdbcDatabase* database,
-                                                     AdbcLoadFlags flags,
-                                                     struct AdbcError* error);
+AdbcStatusCode AdbcDriverManagerDatabaseSetLoadFlags(struct AdbcDatabase *database, AdbcLoadFlags flags,
+                                                     struct AdbcError *error);
 
 /// \brief Set an additional manifest search path list for the driver manager.
 ///
@@ -168,15 +163,14 @@ AdbcStatusCode AdbcDriverManagerDatabaseSetLoadFlags(struct AdbcDatabase* databa
 /// Calling this function with NULL as the `path_list` will clear any
 /// previously set additional search paths.
 ADBC_EXPORT
-AdbcStatusCode AdbcDriverManagerDatabaseSetAdditionalSearchPathList(
-    struct AdbcDatabase* database, const char* path_list, struct AdbcError* error);
+AdbcStatusCode AdbcDriverManagerDatabaseSetAdditionalSearchPathList(struct AdbcDatabase *database,
+                                                                    const char *path_list, struct AdbcError *error);
 
 /// \brief Get a human-friendly description of a status code.
 ADBC_EXPORT
-const char* AdbcStatusCodeMessage(AdbcStatusCode code);
+const char *AdbcStatusCodeMessage(AdbcStatusCode code);
 
-#endif  // ADBC_DRIVER_MANAGER_H
+#endif // ADBC_DRIVER_MANAGER_H
 
 #ifdef __cplusplus
-}
 #endif

@@ -4,10 +4,9 @@
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include <duckdb/parser/parsed_data/create_scalar_function_info.hpp>
-
-#include <duckdb/common/adbc/adbc.h>
-#include <duckdb/common/adbc/driver_manager.h>
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "adbc-vendor/adbc.hpp"
+#include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "adbc_scan.hpp"
 
