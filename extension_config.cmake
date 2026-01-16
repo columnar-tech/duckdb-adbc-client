@@ -20,7 +20,7 @@ set(EXTENSION_NAME adbc)
 set(EXTENSION_SOURCES
     "${EXT_ROOT}/src/adbc_extension.cpp"
     "${EXT_ROOT}/src/adbc_scan.cpp"
-    "${EXT_ROOT}/src/driver_manager.cpp"
+    "${EXT_ROOT}/src/adbc_driver_manager.cpp"
 )
 
 # DuckDB API version

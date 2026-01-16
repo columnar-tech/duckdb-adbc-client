@@ -19,8 +19,8 @@ include_directories(src/include)
 # Create Extension library
 set(EXTENSION_SOURCES
 	src/adbc_extension.cpp
-	src/driver_manager.cpp
 	src/adbc_scan.cpp
+	src/adbc_driver_manager.cpp
 )
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
