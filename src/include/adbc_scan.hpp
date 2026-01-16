@@ -4,8 +4,11 @@
 
 namespace duckdb {
 namespace adbc {
-void AdbcScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
-unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context, TableFunctionBindInput &input,
-                                              vector<LogicalType> &return_types, vector<string> &names);
+void AdbcScanFunction(ClientContext &context, TableFunctionInput &data,
+                      DataChunk &output);
+unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
+                                              TableFunctionBindInput &input,
+                                              vector<LogicalType> &return_types,
+                                              vector<string> &names);
 } // namespace adbc
 } // namespace duckdb
