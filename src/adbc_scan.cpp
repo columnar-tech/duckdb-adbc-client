@@ -1,4 +1,5 @@
 #include "adbc_scan.hpp"
+#include "adbc_raii.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/function/table/arrow.hpp"
@@ -8,13 +9,8 @@
 	do {                                                                                                               \
 		AdbcStatusCode status = (EXPR);                                                                                \
 		if (status != ADBC_STATUS_OK) {                                                                                \
-			if (error.message != nullptr) {                                                                            \
-				std::string msg_copy = error.message;                                                                  \
-				if (error.release) {                                                                                   \
-					error.release(&error);                                                                             \
-				}                                                                                                      \
-				throw EXCEPTION_TYPE(msg_copy);                                                                        \
-			}                                                                                                          \
+			auto message = ToString(&error);                                                                           \
+			throw EXCEPTION_TYPE(message);                                                                             \
 		}                                                                                                              \
 	} while (false)
 
@@ -23,93 +19,25 @@ namespace adbc {
 
 using namespace Private;
 
-class AdbcDatabaseWrapper {
-public:
-	AdbcDatabaseWrapper() = default;
-	~AdbcDatabaseWrapper() {
-		AdbcError error = {};
-		if (created) {
-			AdbcDatabaseRelease(&database, &error);
-		}
-	}
-
-	void Initialize(const string &uri) {
-		AdbcError error = {};
-		CHECK_ADBC(AdbcDatabaseNew(&database, &error), BinderException);
-		created = true;
-		CHECK_ADBC(AdbcDatabaseSetOption(&database, "uri", uri.c_str(), &error), BinderException);
-		CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(&database, ADBC_LOAD_FLAG_DEFAULT, &error), BinderException);
-		CHECK_ADBC(AdbcDatabaseInit(&database, &error), BinderException);
-	}
-
-	AdbcDatabase *get() {
-		return &database;
-	}
-
-private:
-	AdbcDatabase database = {};
-	bool created = false;
-};
-
-class AdbcConnectionWrapper {
-public:
-	AdbcConnectionWrapper() = default;
-	~AdbcConnectionWrapper() {
-		AdbcError error = {};
-		if (created) {
-			AdbcConnectionRelease(&connection, &error);
-		}
-	}
-
-	void Initialize(AdbcDatabase *database) {
-		AdbcError error = {};
-		CHECK_ADBC(AdbcConnectionNew(&connection, &error), BinderException);
-		created = true;
-		CHECK_ADBC(AdbcConnectionInit(&connection, database, &error), BinderException);
-	}
-
-	AdbcConnection *get() {
-		return &connection;
-	}
-
-private:
-	AdbcConnection connection = {};
-	bool created = false;
-};
-
-class AdbcStatementWrapper {
-public:
-	AdbcStatementWrapper() = default;
-	~AdbcStatementWrapper() {
-		AdbcError error = {};
-		if (created) {
-			AdbcStatementRelease(&statement, &error);
-		}
-	}
-
-	void Initialize(AdbcConnection *connection, const string &query_text) {
-		AdbcError error = {};
-		CHECK_ADBC(AdbcStatementNew(connection, &statement, &error), BinderException);
-		created = true;
-		CHECK_ADBC(AdbcStatementSetSqlQuery(&statement, query_text.c_str(), &error), BinderException);
-	}
-
-	AdbcStatement *get() {
-		return &statement;
-	}
-
-private:
-	AdbcStatement statement = {};
-	bool created = false;
-};
-
 // A factory class that holds the ADBC connection state and produces ArrowArrayStreamWrapper instances
 class AdbcArrowStreamFactory {
 public:
-	AdbcArrowStreamFactory(const string &uri, const string &query_text) {
-		database.Initialize(uri);
-		connection.Initialize(database.get());
-		statement.Initialize(connection.get(), query_text);
+	AdbcArrowStreamFactory(const string &uri, const string &query_text) : database(), connection(), statement() {
+		// Initialize the database
+		Private::AdbcError error = {};
+		CHECK_ADBC(AdbcDatabaseNew(database.get(), &error), BinderException);
+		CHECK_ADBC(AdbcDatabaseSetOption(database.get(), "uri", uri.c_str(), &error), BinderException);
+		CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(database.get(), ADBC_LOAD_FLAG_DEFAULT, &error),
+		           BinderException);
+		CHECK_ADBC(AdbcDatabaseInit(database.get(), &error), BinderException);
+
+		// Initialize the connection
+		CHECK_ADBC(AdbcConnectionNew(connection.get(), &error), BinderException);
+		CHECK_ADBC(AdbcConnectionInit(connection.get(), database.get(), &error), BinderException);
+
+		// Initialize the statement
+		CHECK_ADBC(AdbcStatementNew(connection.get(), statement.get(), &error), BinderException);
+		CHECK_ADBC(AdbcStatementSetSqlQuery(statement.get(), query_text.c_str(), &error), BinderException);
 	}
 
 	AdbcStatement *GetStatement() {
@@ -117,9 +45,9 @@ public:
 	}
 
 private:
-	AdbcDatabaseWrapper database = {};
-	AdbcConnectionWrapper connection = {};
-	AdbcStatementWrapper statement = {};
+	Handle<Private::AdbcDatabase> database;
+	Handle<Private::AdbcConnection> connection;
+	Handle<Private::AdbcStatement> statement;
 };
 
 unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
