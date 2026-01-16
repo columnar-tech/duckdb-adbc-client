@@ -1,27 +1,47 @@
 cmake_minimum_required(VERSION 3.5)
 
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Set extension name here
 set(TARGET_NAME adbc)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
-# DuckDB's extension distribution supports vcpkg. As such, dependencies can be added in ./vcpkg.json and then
-# used in cmake with find_package. Feel free to remove or replace with other dependencies.
-# Note that it should also be removed from vcpkg.json to prevent needlessly installing it..
-set(EXTENSION_NAME ${TARGET_NAME}_extension)
-set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
+set(EXTENSION_NAME ${TARGET_NAME})
 
-project(${TARGET_NAME})
+add_definitions(-DDUCKDB_EXTENSION_NAME=${EXTENSION_NAME})
+
+###
+# Build
+###
+project(${EXTENSION_NAME} LANGUAGES CXX)
+
 include_directories(src/include)
 
-set(EXTENSION_SOURCES 
-    src/adbc_extension.cpp 
-    src/adbc_scan.cpp
-    src/driver_manager.cpp)
+# Create Extension library
+set(EXTENSION_SOURCES
+	src/adbc_extension.cpp
+	src/driver_manager.cpp
+	src/adbc_scan.cpp
+)
 
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
+
+if (DUCKDB_WASM_EXTENSION)
+	add_library(${EXTENSION_NAME} STATIC ${EXTENSION_SOURCES})
+else()
+	add_library(${EXTENSION_NAME} SHARED ${EXTENSION_SOURCES})
+endif()
+
+
+# Hide symbols
+set(CMAKE_CXX_VISIBILITY_PRESET hidden)
+set(CMAKE_C_VISIBILITY_PRESET hidden)
+set(VISIBILITY_INLINES_HIDDEN ON)
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -s")
+set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
+
+# Include own headers
+target_include_directories(${EXTENSION_NAME} PRIVATE src/include)
 
 install(
   TARGETS ${EXTENSION_NAME}

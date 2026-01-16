@@ -75,13 +75,11 @@ public:
 	    : ArrowScanFunctionData(AdbcProduceArrowScan, reinterpret_cast<uintptr_t>(factory.get())),
 	      adbc_arrow_stream_factory(std::move(factory)) {
 
-		AdbcError error = {};
-
 		// Retrieve and register the schema information from ADBC with DuckDB
-		CHECK_ADBC(AdbcStatementExecuteSchema(adbc_arrow_stream_factory->GetStatement(),
-		                                      reinterpret_cast<Private::ArrowSchema *>(&schema_root.arrow_schema),
-		                                      &error),
-		           BinderException);
+		AdbcError error = {};
+		auto *statement = adbc_arrow_stream_factory->GetStatement();
+		auto *schema = reinterpret_cast<Private::ArrowSchema *>(&schema_root.arrow_schema);
+		CHECK_ADBC(AdbcStatementExecuteSchema(statement, schema, &error), BinderException);
 		ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table,
 		                                             schema_root.arrow_schema);
 	}
