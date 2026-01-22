@@ -26,13 +26,6 @@ set(EXTENSION_SOURCES
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
 build_loadable_extension(${TARGET_NAME} " " ${EXTENSION_SOURCES})
 
-if (DUCKDB_WASM_EXTENSION)
-	add_library(${EXTENSION_NAME} STATIC ${EXTENSION_SOURCES})
-else()
-	add_library(${EXTENSION_NAME} SHARED ${EXTENSION_SOURCES})
-endif()
-
-
 # Hide symbols
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
 set(CMAKE_C_VISIBILITY_PRESET hidden)
