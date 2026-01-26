@@ -152,15 +152,7 @@ struct ArrowArrayStream {
 // Storage class macros for Windows
 // Allow overriding/aliasing with application-defined macros
 #if !defined(ADBC_EXPORT)
-#if defined(_WIN32)
-#if defined(ADBC_EXPORTING)
-#define ADBC_EXPORT __declspec(dllexport)
-#else
-#define ADBC_EXPORT __declspec(dllimport)
-#endif // defined(ADBC_EXPORTING)
-#else
 #define ADBC_EXPORT
-#endif // defined(_WIN32)
 #endif // !defined(ADBC_EXPORT)
 
 /// \defgroup adbc-error-handling Error Handling
