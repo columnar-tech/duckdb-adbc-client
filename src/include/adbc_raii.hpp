@@ -12,7 +12,7 @@ using namespace Private;
 #define ADBCV_STRINGIFY(s) #s
 #define ADBCV_STRINGIFY_VALUE(s) ADBCV_STRINGIFY(s)
 
-std::string StatusCodeToString(AdbcStatusCode code) {
+inline std::string StatusCodeToString(AdbcStatusCode code) {
 #define CASE(CONSTANT)                                                         \
   case ADBC_STATUS_##CONSTANT:                                                 \
     return ADBCV_STRINGIFY_VALUE(ADBC_STATUS_##CONSTANT) " (" #CONSTANT ")";
@@ -38,7 +38,7 @@ std::string StatusCodeToString(AdbcStatusCode code) {
   }
 #undef CASE
 }
-std::string ToString(struct AdbcError *error) {
+inline std::string ToString(struct AdbcError *error) {
   if (error && error->message) {
     std::string result = error->message;
     error->release(error);
