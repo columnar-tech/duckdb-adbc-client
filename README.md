@@ -1,101 +1,47 @@
-# DuckDB C/C++ extension template
-This is an **experimental** template for C/C++ based extensions that link with the **C Extension API** of DuckDB. Note that this
-is different from https://github.com/duckdb/extension-template, which links against the C++ API of DuckDB.
+# DuckDB ADBC Extension
+The ADBC extension allows DuckDB to directly access databases through the Arrow Database Connectivity (ADBC) API. ADBC enables efficient high-performance data transfer by exchanging data in Arrow format, a columnar data representation optimized for efficient analytics.
 
-Features:
-- No DuckDB build required
-- CI/CD chain preconfigured
-- (Coming soon) Works with community extensions
+## Usage
+To use the ADBC extension, you first can install it from DuckDB's community extesnsion repository with the following commands in the DuckDB shell:
 
-## Cloning
-Clone the repo with submodules
-
-```shell
-git clone --recurse-submodules <repo>
+```sql
+INSTALL adbc FROM community;
+LOAD adbc;
 ```
 
-## Dependencies
-In principle, compiling this template only requires a C/C++ toolchain. However, this template relies on some additional
-tooling to make life a little easier and to be able to share CI/CD infrastructure with extension templates for other languages:
+You can then read from an ADBC data source by calling the `read_adbc` table function, which takes a URI and SQL query as input parameters. 
 
-- Python3
-- Python3-venv
-- [Make](https://www.gnu.org/software/make)
-- CMake
-- Git
-- (Optional) Ninja + ccache
+For example, to query the `games` table from a PostgreSQL database `demo` running on `localhost:5432` you can run the following command from the DuckDB shell:
 
-Installing these dependencies will vary per platform:
-- For Linux, these come generally pre-installed or are available through the distro-specific package manager.
-- For MacOS, [homebrew](https://formulae.brew.sh/).
-- For Windows, [chocolatey](https://community.chocolatey.org/).
-
-## Building
-After installing the dependencies, building is a two-step process. Firstly run:
-```shell
-make configure
-```
-This will ensure a Python venv is set up with DuckDB and DuckDB's test runner installed. Additionally, depending on configuration,
-DuckDB will be used to determine the correct platform for which you are compiling.
-
-Then, to build the extension run:
-```shell
-make debug
-```
-This delegates the build process to cargo, which will produce a shared library in `target/debug/<shared_lib_name>`. After this step, 
-a script is run to transform the shared library into a loadable extension by appending a binary footer. The resulting extension is written
-to the `build/debug` directory.
-
-To create optimized release binaries, simply run `make release` instead.
-
-### Faster builds
-We recommend to install Ninja and Ccache for building as this can have a significant speed boost during development. After installing, ninja can be used 
-by running:
-```shell
-make clean
-GEN=ninja make debug
+```sql
+SELECT * FROM read_adbc('postgresql://localhost:5432/demo', 'SELECT * FROM games');
 ```
 
-## Testing
-This extension uses the DuckDB Python client for testing. This should be automatically installed in the `make configure` step.
-The tests themselves are written in the SQLLogicTest format, just like most of DuckDB's tests. A sample test can be found in
-`test/sql/<extension_name>.test`. To run the tests using the *debug* build:
+Note that you must have the corresponding ADBC driver installed in your system to read from a given data source.
 
-```shell
-make test_debug
+You can find more examples about how to use ADBC at: <https://github.com/columnar-tech/adbc-quickstarts/>.
+
+The easiest way to install ADBC drivers is through the command line tool `dbc`. 
+
+You can find more details about `dbc` at: <https://columnar.tech/dbc/>. 
+
+## Building From Source
+
+To build the extension from source and install it locally you can follow the steps below:
+```sh
+# Clone the repo and its dependencies
+git clone --recurse-submodules git@github.com:columnar-tech/duckdb-adbc-client.git
+cd duckdb-adbc-client
+# Build the extension from source
+GEN=ninja make release
+# Build DuckDB from source
+cd duckdb
+GEN=ninja make release
+# Run DuckDB in unsigned mode to load untrusted extensions
+./build/release/duckdb -unsigned
 ```
 
-or for the *release* build:
-```shell
-make test_release
+Next, in the DuckDB shell, run the following command to load the ADBC extension:
+```sql
+LOAD '../build/release/adbc.duckdb_extension';
 ```
-
-### Version switching
-Testing with different DuckDB versions is really simple:
-
-First, run 
-```
-make clean_all
-```
-to ensure the previous `make configure` step is deleted.
-
-Then, run 
-```
-DUCKDB_TEST_VERSION=v1.1.2 make configure
-```
-to select a different duckdb version to test with
-
-Finally, build and test with 
-```
-make debug
-make test_debug
-```
-
-### Using unstable Extension C API functionality
-The DuckDB Extension C API has a stable part and an unstable part. By default, this template only allows usage of the stable
-part of the API. To switch it to allow using the unstable part, take the following steps:
-
-Firstly, set your `TARGET_DUCKDB_VERSION` to your desired in `./Makefile`. Then, run `make update_duckdb_headers` to ensure 
-the headers in `./duckdb_capi` are set to the correct version. (FIXME: this is not yet working properly). 
-
-Finally, set `USE_UNSTABLE_C_API` to 1 in `./Makefile`. That's all!
