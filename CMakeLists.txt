@@ -14,6 +14,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Include headers
 include_directories(src/include)
+include_directories(arrow-adbc/c/vendor)
 
 # Sources
 set(EXTENSION_SOURCES
