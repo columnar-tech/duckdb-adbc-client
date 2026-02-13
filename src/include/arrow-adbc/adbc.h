@@ -38,6 +38,7 @@
 /// \version 1.1.0
 
 #pragma once
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -50,18 +51,24 @@
 
 //! @cond Doxygen_Suppress
 
-// #ifdef __cplusplus
-// #endif
+#ifdef __cplusplus
+extern "C++" {
+#undef ARROW_FLAG_DICTIONARY_ORDERED
+#undef ARROW_C_DATA_INTERFACE
+#undef ARROW_FLAG_NULLABLE
+#undef ARROW_FLAG_MAP_KEYS_SORTED
+#undef ARROW_C_STREAM_INTERFACE
+#endif
 
-// // Extra guard for versions of Arrow without the canonical guard
-// #ifndef ARROW_FLAG_DICTIONARY_ORDERED
+// Extra guard for versions of Arrow without the canonical guard
+#ifndef ARROW_FLAG_DICTIONARY_ORDERED
 
-// #ifndef ARROW_C_DATA_INTERFACE
-// #define ARROW_C_DATA_INTERFACE
+#ifndef ARROW_C_DATA_INTERFACE
+#define ARROW_C_DATA_INTERFACE
 
-// #define ARROW_FLAG_DICTIONARY_ORDERED 1
-// #define ARROW_FLAG_NULLABLE           2
-// #define ARROW_FLAG_MAP_KEYS_SORTED    4
+#define ARROW_FLAG_DICTIONARY_ORDERED 1
+#define ARROW_FLAG_NULLABLE 2
+#define ARROW_FLAG_MAP_KEYS_SORTED 4
 
 struct ArrowSchema {
   // Array type description
@@ -96,10 +103,10 @@ struct ArrowArray {
   void *private_data;
 };
 
-// #endif // ARROW_C_DATA_INTERFACE
+#endif // ARROW_C_DATA_INTERFACE
 
-// #ifndef ARROW_C_STREAM_INTERFACE
-// #define ARROW_C_STREAM_INTERFACE
+#ifndef ARROW_C_STREAM_INTERFACE
+#define ARROW_C_STREAM_INTERFACE
 
 struct ArrowArrayStream {
   // Callback to get the stream type
@@ -139,8 +146,8 @@ struct ArrowArrayStream {
   void *private_data;
 };
 
-// #endif // ARROW_C_STREAM_INTERFACE
-// #endif // ARROW_FLAG_DICTIONARY_ORDERED
+#endif // ARROW_C_STREAM_INTERFACE
+#endif // ARROW_FLAG_DICTIONARY_ORDERED
 
 //! @endcond
 
@@ -152,7 +159,15 @@ struct ArrowArrayStream {
 // Storage class macros for Windows
 // Allow overriding/aliasing with application-defined macros
 #if !defined(ADBC_EXPORT)
+#if defined(_WIN32)
+#if defined(ADBC_EXPORTING)
+#define ADBC_EXPORT __declspec(dllexport)
+#else
+#define ADBC_EXPORT __declspec(dllimport)
+#endif // defined(ADBC_EXPORTING)
+#else
 #define ADBC_EXPORT
+#endif // defined(_WIN32)
 #endif // !defined(ADBC_EXPORT)
 
 /// \defgroup adbc-error-handling Error Handling
@@ -2460,4 +2475,5 @@ typedef AdbcStatusCode (*AdbcDriverInitFunc)(int version, void *driver,
 #endif // ADBC
 
 #ifdef __cplusplus
+}
 #endif

@@ -52,9 +52,8 @@
 #include <utility>
 #include <vector>
 
-using namespace std::string_literals; // NOLINT [build/namespaces]
-
 namespace Private {
+using namespace std::string_literals; // NOLINT [build/namespaces]
 
 ADBC_EXPORT
 std::vector<std::filesystem::path>

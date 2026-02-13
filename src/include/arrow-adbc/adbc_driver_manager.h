@@ -21,10 +21,12 @@
 /// same process.
 
 #pragma once
+
 #include <arrow-adbc/adbc.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
+extern "C++" {
 #endif
 
 #ifndef ADBC_DRIVER_MANAGER_H
@@ -189,4 +191,5 @@ const char *AdbcStatusCodeMessage(AdbcStatusCode code);
 #endif // ADBC_DRIVER_MANAGER_H
 
 #ifdef __cplusplus
+}
 #endif
