@@ -42,6 +42,6 @@ GEN=ninja make release
 Next, in the DuckDB shell, run:
 ```sql
 LOAD '../build/release/adbc.duckdb_extension';
-``
+```
 
 Now that the extension is loaded, you can run `read_adbc` to read data using ADBC.
