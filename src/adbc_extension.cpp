@@ -35,6 +35,10 @@ static void LoadInternal(ExtensionLoader &loader) {
   // No support for filter pushdown
   read_adbc_function.filter_pushdown = false;
   loader.RegisterFunction(read_adbc_function);
+
+  // Register an ATTACH function
+  adbc::AdbcAttachFunction adbc_attach_function;
+  loader.RegisterFunction(adbc_attach_function);
 }
 
 void AdbcExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }

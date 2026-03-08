@@ -19,34 +19,105 @@ namespace adbc {
 
 using namespace Private;
 
+static void InitializeDatabase(Private::AdbcDatabase *database,
+                               const string &uri) {
+  // Initialize the database
+  Private::AdbcError error = {};
+  CHECK_ADBC(AdbcDatabaseNew(database, &error), BinderException);
+  CHECK_ADBC(AdbcDatabaseSetOption(database, "uri", uri.c_str(), &error),
+             BinderException);
+  CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(
+                 database, ADBC_LOAD_FLAG_DEFAULT, &error),
+             BinderException);
+  CHECK_ADBC(AdbcDatabaseInit(database, &error), BinderException);
+}
+
+static void InitializeConnection(Private::AdbcDatabase *database,
+                                 Private::AdbcConnection *connection) {
+  // Initialize the connection
+  Private::AdbcError error = {};
+  CHECK_ADBC(AdbcConnectionNew(connection, &error), BinderException);
+  CHECK_ADBC(AdbcConnectionInit(connection, database, &error), BinderException);
+}
+
+static void InitializeStatement(Private::AdbcConnection *connection,
+                                Private::AdbcStatement *statement,
+                                const string &query_text) {
+  // Initialize the statement
+  Private::AdbcError error = {};
+  CHECK_ADBC(AdbcStatementNew(connection, statement, &error), BinderException);
+  CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), &error),
+             BinderException);
+}
+
+static vector<string>
+GetTableNamesFromConnection(Private::AdbcConnection *connection) {
+  // Retrieve all table names from the connection
+  vector<string> table_names;
+  Private::AdbcError error = {};
+
+  // Fetch the hierarchical objects from the connection
+  Private::ArrowArrayStream stream;
+  CHECK_ADBC(AdbcConnectionGetObjects(connection, ADBC_OBJECT_DEPTH_TABLES,
+                                      nullptr, nullptr, nullptr, nullptr,
+                                      nullptr, &stream, &error),
+             BinderException);
+
+  // Iterate the results
+  while (true) {
+    Private::ArrowArray batch = {};
+    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
+      break;
+    }
+
+    // Get the catalogs
+    Private::ArrowArray *catalogs = &batch;
+    Private::ArrowArray *catalog_schemas_list = batch.children[1];
+    for (int64_t i = 0; i < catalogs->length; ++i) {
+      const int32_t *schema_offsets =
+          (const int32_t *)catalog_schemas_list->buffers[1];
+      int32_t schema_start = schema_offsets[i];
+      int32_t schema_end = schema_offsets[i + 1];
+
+      Private::ArrowArray *schemas_struct = catalog_schemas_list->children[0];
+
+      // Get the schemas for this catalog
+      for (int32_t j = schema_start; j < schema_end; ++j) {
+        Private::ArrowArray *tables_list = schemas_struct->children[1];
+        const int32_t *table_offsets = (const int32_t *)tables_list->buffers[1];
+        int32_t table_start = table_offsets[j];
+        int32_t table_end = table_offsets[j + 1];
+
+        Private::ArrowArray *table_struct = tables_list->children[0];
+        Private::ArrowArray *table_names_array = table_struct->children[0];
+
+        const int32_t *name_offsets =
+            (const int32_t *)table_names_array->buffers[1];
+        const char *name_data = (const char *)table_names_array->buffers[2];
+
+        // Get the tables for each schema
+        for (int32_t k = table_start; k < table_end; ++k) {
+          int32_t start = name_offsets[k];
+          int32_t end = name_offsets[k + 1];
+          table_names.emplace_back(name_data + start, end - start);
+        }
+      }
+    }
+    batch.release(&batch);
+  }
+  stream.release(&stream);
+  return table_names;
+}
+
 // A factory class that holds the ADBC connection state and produces
 // ArrowArrayStreamWrapper instances
 class AdbcArrowStreamFactory {
 public:
   AdbcArrowStreamFactory(const string &uri, const string &query_text)
       : database(), connection(), statement() {
-    // Initialize the database
-    Private::AdbcError error = {};
-    CHECK_ADBC(AdbcDatabaseNew(database.get(), &error), BinderException);
-    CHECK_ADBC(
-        AdbcDatabaseSetOption(database.get(), "uri", uri.c_str(), &error),
-        BinderException);
-    CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(
-                   database.get(), ADBC_LOAD_FLAG_DEFAULT, &error),
-               BinderException);
-    CHECK_ADBC(AdbcDatabaseInit(database.get(), &error), BinderException);
-
-    // Initialize the connection
-    CHECK_ADBC(AdbcConnectionNew(connection.get(), &error), BinderException);
-    CHECK_ADBC(AdbcConnectionInit(connection.get(), database.get(), &error),
-               BinderException);
-
-    // Initialize the statement
-    CHECK_ADBC(AdbcStatementNew(connection.get(), statement.get(), &error),
-               BinderException);
-    CHECK_ADBC(
-        AdbcStatementSetSqlQuery(statement.get(), query_text.c_str(), &error),
-        BinderException);
+    InitializeDatabase(database.get(), uri);
+    InitializeConnection(database.get(), connection.get());
+    InitializeStatement(connection.get(), statement.get(), query_text);
   }
 
   AdbcStatement *GetStatement() { return statement.get(); }
@@ -187,6 +258,60 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
   function_data->all_types = return_types;
   return function_data;
 }
+
+struct AttachFunctionData : public TableFunctionData {
+  bool finished = false;
+  string uri = "";
+};
+
+static unique_ptr<FunctionData> AttachBind(ClientContext &context,
+                                           TableFunctionBindInput &input,
+                                           vector<LogicalType> &return_types,
+                                           vector<string> &names) {
+
+  // Save the URI for when ATTACH is invoked
+  auto function_data = make_uniq<AttachFunctionData>();
+  function_data->uri = input.inputs[0].GetValue<string>();
+
+  // Indicate whether the operation succeeded
+  return_types.push_back(LogicalType::BOOLEAN);
+  names.emplace_back("Success");
+  return function_data;
+}
+
+static void AttachFunction(ClientContext &context, TableFunctionInput &data_p,
+                           DataChunk &output) {
+
+  auto &data = (AttachFunctionData &)*data_p.bind_data;
+  if (data.finished) {
+    return;
+  } else {
+    data.finished = true;
+  }
+
+  auto duckdb_connection = Connection(context.db->GetDatabase(context));
+
+  {
+    // Open an ADBC connection with the URI
+    Handle<Private::AdbcDatabase> database = {};
+    Handle<Private::AdbcConnection> connection = {};
+    InitializeDatabase(database.get(), data.uri);
+    InitializeConnection(database.get(), connection.get());
+
+    // Retrieve all of the accessible tables from the connection
+    for (auto &table_name : GetTableNamesFromConnection(connection.get())) {
+      duckdb_connection
+          .TableFunction(
+              "read_adbc",
+              {Value(data.uri), Value(string("SELECT * FROM ") + table_name)})
+          ->CreateView(table_name, false, false);
+    }
+  }
+}
+
+AdbcAttachFunction::AdbcAttachFunction()
+    : TableFunction("adbc_attach", {LogicalType::VARCHAR}, AttachFunction,
+                    AttachBind) {}
 
 } // namespace adbc
 } // namespace duckdb
