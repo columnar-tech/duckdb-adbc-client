@@ -9,26 +9,22 @@ namespace adbc {
 AdbcCatalog::~AdbcCatalog() = default;
 
 void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-	// TODO: Implement this
-	// For each schema: execute callback()
+	auto schema_entry = GetSchema(GetCatalogTransaction(context), "public", OnEntryNotFound::RETURN_NULL);
+    	if (schema_entry) {
+        	callback(*schema_entry);
+    	}
 }
 
 optional_ptr<SchemaCatalogEntry> AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                                                                 const EntryLookupInfo &schema_lookup,
                                                                 OnEntryNotFound if_not_found) {
-	// TODO: Consider what happens if the schema doesn't actually exist
+	
 	const auto &name = schema_lookup.GetEntryName();
-
-	auto it = schema_cache.find(name);
-	if (it != schema_cache.end()) {
-	    return it->second.get();
-	}
-
 	CreateSchemaInfo info;
 	info.schema = name; 
-	auto new_entry = make_uniq<AdbcSchemaEntry>(*this, info);
-	auto ptr = new_entry.get();
-	schema_cache[name] = std::move(new_entry);
+	auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
+	auto ptr = schema_entry.get();
+  	owned_schemas[name] = std::move(schema_entry);
 	return ptr; 
 }
 

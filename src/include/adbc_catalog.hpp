@@ -48,7 +48,7 @@ public:
 
 private:
 	string uri;
-	case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> schema_cache;
+	case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };
 
 class AdbcSchemaEntry : public SchemaCatalogEntry {
@@ -123,8 +123,7 @@ public:
         }
 
 private:
-    case_insensitive_map_t<unique_ptr<CatalogEntry>> view_cache;
-
+	case_insensitive_map_t<unique_ptr<CatalogEntry>> owned_views;
 };
 
 
