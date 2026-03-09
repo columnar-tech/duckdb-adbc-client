@@ -259,59 +259,5 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
   return function_data;
 }
 
-struct AttachFunctionData : public TableFunctionData {
-  bool finished = false;
-  string uri = "";
-};
-
-static unique_ptr<FunctionData> AttachBind(ClientContext &context,
-                                           TableFunctionBindInput &input,
-                                           vector<LogicalType> &return_types,
-                                           vector<string> &names) {
-
-  // Save the URI for when ATTACH is invoked
-  auto function_data = make_uniq<AttachFunctionData>();
-  function_data->uri = input.inputs[0].GetValue<string>();
-
-  // Indicate whether the operation succeeded
-  return_types.push_back(LogicalType::BOOLEAN);
-  names.emplace_back("Success");
-  return function_data;
-}
-
-static void AttachFunction(ClientContext &context, TableFunctionInput &data_p,
-                           DataChunk &output) {
-
-  auto &data = (AttachFunctionData &)*data_p.bind_data;
-  if (data.finished) {
-    return;
-  } else {
-    data.finished = true;
-  }
-
-  auto duckdb_connection = Connection(context.db->GetDatabase(context));
-
-  {
-    // Open an ADBC connection with the URI
-    Handle<Private::AdbcDatabase> database = {};
-    Handle<Private::AdbcConnection> connection = {};
-    InitializeDatabase(database.get(), data.uri);
-    InitializeConnection(database.get(), connection.get());
-
-    // Retrieve all of the accessible tables from the connection
-    for (auto &table_name : GetTableNamesFromConnection(connection.get())) {
-      duckdb_connection
-          .TableFunction(
-              "read_adbc",
-              {Value(data.uri), Value(string("SELECT * FROM ") + table_name)})
-          ->CreateView(table_name, false, false);
-    }
-  }
-}
-
-AdbcAttachFunction::AdbcAttachFunction()
-    : TableFunction("adbc_attach", {LogicalType::VARCHAR}, AttachFunction,
-                    AttachBind) {}
-
 } // namespace adbc
 } // namespace duckdb

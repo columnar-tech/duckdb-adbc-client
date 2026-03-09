@@ -4,6 +4,7 @@
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "adbc_scan.hpp"
+#include "adbc_storage.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
@@ -36,9 +37,9 @@ static void LoadInternal(ExtensionLoader &loader) {
   read_adbc_function.filter_pushdown = false;
   loader.RegisterFunction(read_adbc_function);
 
-  // Register an ATTACH function
-  adbc::AdbcAttachFunction adbc_attach_function;
-  loader.RegisterFunction(adbc_attach_function);
+  // Storage extension for ATTACH
+  auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+  config.storage_extensions["adbc"] = make_uniq<adbc::AdbcStorageExtension>();
 }
 
 void AdbcExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }
@@ -54,6 +55,5 @@ std::string AdbcExtension::Version() const {
 } // namespace duckdb
 
 extern "C" {
-
 DUCKDB_CPP_EXTENSION_ENTRY(adbc, loader) { duckdb::LoadInternal(loader); }
 }

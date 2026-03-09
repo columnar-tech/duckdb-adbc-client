@@ -19,7 +19,11 @@ include_directories(arrow-adbc/c/vendor)
 # Sources
 set(EXTENSION_SOURCES
     src/adbc_extension.cpp
+    src/adbc_catalog.cpp
     src/adbc_scan.cpp
+    src/adbc_schema.cpp
+    src/adbc_storage.cpp
+    src/adbc_transaction.cpp
     src/adbc_driver_manager.cpp
 )
 
