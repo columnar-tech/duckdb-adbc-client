@@ -35,9 +35,7 @@ void AdbcTransactionManager::RollbackTransaction(Transaction &transaction) {
 	transactions.erase(transaction);
 }
 
-void AdbcTransactionManager::Checkpoint(ClientContext &context, bool force) {
-	// No checkpointing needed for read-only transactions
-}
+void AdbcTransactionManager::Checkpoint(ClientContext &context, bool force) {}
 
 unique_ptr<TransactionManager> AdbcCreateTransactionManager(optional_ptr<StorageExtensionInfo> storage_info,
                                                                  AttachedDatabase &db, Catalog &catalog) {

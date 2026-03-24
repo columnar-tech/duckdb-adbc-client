@@ -8,6 +8,14 @@ namespace duckdb {
 namespace adbc {
 
 using namespace Private;
+#define CHECK_ADBC(EXPR, EXCEPTION_TYPE)                                       \
+  do {                                                                         \
+    AdbcStatusCode status = (EXPR);                                            \
+    if (status != ADBC_STATUS_OK) {                                            \
+      auto message = ToString(&error);                                         \
+      throw EXCEPTION_TYPE(message);                                           \
+    }                                                                          \
+  } while (false)
 
 #define ADBCV_STRINGIFY(s) #s
 #define ADBCV_STRINGIFY_VALUE(s) ADBCV_STRINGIFY(s)

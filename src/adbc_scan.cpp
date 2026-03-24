@@ -5,22 +5,12 @@
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 
-#define CHECK_ADBC(EXPR, EXCEPTION_TYPE)                                       \
-  do {                                                                         \
-    AdbcStatusCode status = (EXPR);                                            \
-    if (status != ADBC_STATUS_OK) {                                            \
-      auto message = ToString(&error);                                         \
-      throw EXCEPTION_TYPE(message);                                           \
-    }                                                                          \
-  } while (false)
-
 namespace duckdb {
 namespace adbc {
 
 using namespace Private;
 
-static void InitializeDatabase(Private::AdbcDatabase *database,
-                               const string &uri) {
+void InitializeDatabase(Private::AdbcDatabase *database, const string &uri) {
   // Initialize the database
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcDatabaseNew(database, &error), BinderException);
@@ -32,17 +22,17 @@ static void InitializeDatabase(Private::AdbcDatabase *database,
   CHECK_ADBC(AdbcDatabaseInit(database, &error), BinderException);
 }
 
-static void InitializeConnection(Private::AdbcDatabase *database,
-                                 Private::AdbcConnection *connection) {
+void InitializeConnection(Private::AdbcDatabase *database,
+                          Private::AdbcConnection *connection) {
   // Initialize the connection
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcConnectionNew(connection, &error), BinderException);
   CHECK_ADBC(AdbcConnectionInit(connection, database, &error), BinderException);
 }
 
-static void InitializeStatement(Private::AdbcConnection *connection,
-                                Private::AdbcStatement *statement,
-                                const string &query_text) {
+void InitializeStatement(Private::AdbcConnection *connection,
+                         Private::AdbcStatement *statement,
+                         const string &query_text) {
   // Initialize the statement
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcStatementNew(connection, statement, &error), BinderException);
@@ -50,7 +40,7 @@ static void InitializeStatement(Private::AdbcConnection *connection,
              BinderException);
 }
 
-static vector<string>
+vector<string>
 GetTableNamesFromConnection(Private::AdbcConnection *connection) {
   // Retrieve all table names from the connection
   vector<string> table_names;
@@ -259,7 +249,8 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
   return function_data;
 }
 
-vector<string> GetTableNames(const string &uri) {
+vector<string> GetTableNamesFromSchema(const string &uri,
+                                       const string &schema_name) {
   Handle<Private::AdbcDatabase> database = {};
   Handle<Private::AdbcConnection> connection = {};
   InitializeDatabase(database.get(), uri);
@@ -270,8 +261,9 @@ vector<string> GetTableNames(const string &uri) {
 
   // Fetch the hierarchical objects from the connection
   Private::ArrowArrayStream stream;
-  CHECK_ADBC(AdbcConnectionGetObjects(connection.get(), ADBC_OBJECT_DEPTH_TABLES,
-                                      nullptr, nullptr, nullptr, nullptr,
+  CHECK_ADBC(AdbcConnectionGetObjects(connection.get(),
+                                      ADBC_OBJECT_DEPTH_TABLES, nullptr,
+                                      schema_name.c_str(), nullptr, nullptr,
                                       nullptr, &stream, &error),
              BinderException);
 
