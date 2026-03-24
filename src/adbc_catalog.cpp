@@ -2,7 +2,6 @@
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "adbc_catalog.hpp"
-#include <iostream>
 
 namespace duckdb {
 namespace adbc {
@@ -12,7 +11,6 @@ AdbcCatalog::~AdbcCatalog() = default;
 void AdbcCatalog::ScanSchemas(
     ClientContext &context,
     std::function<void(SchemaCatalogEntry &)> callback) {
-  std::cout << "AdbcCatalog::ScanSchemas() called!" << std::endl;
 
   // Lookup all schemas via ADBC
   Private::AdbcError error = {};
@@ -65,7 +63,6 @@ void AdbcCatalog::ScanSchemas(
       owned_schemas[schema_name] = std::move(schema_entry);
     }
     // execute the callback
-    std::cout << "Executing callback!" << std::endl;
     callback(*owned_schemas[schema_name]);
   }
 }
@@ -74,7 +71,6 @@ optional_ptr<SchemaCatalogEntry>
 AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                           const EntryLookupInfo &schema_lookup,
                           OnEntryNotFound if_not_found) {
-  std::cout << "AdbcCatalog::LookupSchema() called!" << std::endl;
   const auto &name = schema_lookup.GetEntryName();
 
   // Lookup the name and see if the schema actually exists

@@ -7,7 +7,6 @@
 #include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "adbc_raii.hpp"
 #include "adbc_scan.hpp"
-#include <iostream>
 
 namespace duckdb {
 namespace adbc {
@@ -20,16 +19,13 @@ public:
       : Catalog(db), uri(uri) {
     InitializeDatabase(database.get(), uri);
     InitializeConnection(database.get(), connection.get());
-    std::cout << "AdbcCatalog() called!" << std::endl;
   }
 
   ~AdbcCatalog() override;
 
   const string &GetUri() const { return uri; }
 
-  void Initialize(bool load_builtin) override {
-    std::cout << "AdbcCatalog::Initialize() called!" << std::endl;
-  }
+  void Initialize(bool load_builtin) override {}
   string GetCatalogType() override { return "adbc"; }
   void ScanSchemas(ClientContext &context,
                    std::function<void(SchemaCatalogEntry &)> callback) override;

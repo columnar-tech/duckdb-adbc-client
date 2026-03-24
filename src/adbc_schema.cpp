@@ -3,7 +3,6 @@
 #include "adbc_table_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb.hpp"
-#include <iostream>
 
 namespace duckdb {
 namespace adbc {
@@ -23,8 +22,6 @@ void AdbcSchemaEntry::CreateTableEntry(ClientContext &context,
     auto select_stmt = CreateViewInfo::ParseSelect(sql);
     auto binder = Binder::CreateBinder(context);
     auto bound_statement = binder->Bind((SQLStatement &)*select_stmt);
-    std::cout << "Table " << table_name << " has "
-              << bound_statement.names.size() << " columns." << std::endl;
 
     auto table_info = make_uniq<CreateTableInfo>(*this, table_name);
     for (idx_t i = 0; i < bound_statement.names.size(); i++) {
