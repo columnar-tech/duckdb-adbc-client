@@ -11,7 +11,7 @@ public:
   AdbcSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
       : SchemaCatalogEntry(catalog, info) {}
 
-  optional_ptr<CatalogEntry> CreateTableEntry(ClientContext &context, const string &table_name);
+  CatalogEntry* CreateTableEntry(ClientContext &context, const string &table_name);
 
   optional_ptr<CatalogEntry>
   LookupEntry(CatalogTransaction transaction,

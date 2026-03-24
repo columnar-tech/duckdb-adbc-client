@@ -24,7 +24,7 @@ public:
   void Initialize(bool load_builtin) override {}
   string GetCatalogType() override { return "adbc"; }
 
-  optional_ptr<SchemaCatalogEntry> CreateCatalogEntry(const string &schema_name); 
+  SchemaCatalogEntry* CreateCatalogEntry(const string &schema_name); 
   void ScanSchemas(ClientContext &context,
                    std::function<void(SchemaCatalogEntry &)> callback) override;
   optional_ptr<SchemaCatalogEntry>

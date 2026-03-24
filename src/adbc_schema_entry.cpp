@@ -9,7 +9,7 @@
 namespace duckdb {
 namespace adbc {
 
-optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTableEntry(ClientContext &context,
+CatalogEntry* AdbcSchemaEntry::CreateTableEntry(ClientContext &context,
                                        const string &table_name) {
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
     auto schema_name = this->name;
@@ -43,10 +43,13 @@ optional_ptr<CatalogEntry>
 AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
                              const EntryLookupInfo &lookup_info) {
     auto &table_name = lookup_info.GetEntryName();
+    CatalogEntry* ptr = nullptr;
     if (owned_tables.find(table_name) == owned_tables.end()) {
-        return CreateTableEntry(transaction.GetContext(), table_name);
+        ptr = CreateTableEntry(transaction.GetContext(), table_name);
+    } else {
+    	ptr = owned_tables[table_name].get();
     }
-    return owned_tables[table_name].get();
+    return ptr;
 }
 
 void AdbcSchemaEntry::Scan(
@@ -62,12 +65,13 @@ void AdbcSchemaEntry::Scan(
 
     for (const auto &table_name :
          GetTableNamesFromSchema(adbc_catalog.GetUri(), schema_name)) {
+	CatalogEntry* ptr = nullptr;
         if (owned_tables.find(table_name) == owned_tables.end()) {
-            auto ptr = CreateTableEntry(context, table_name);
-	    callback(*ptr);
+            ptr = CreateTableEntry(context, table_name);
         } else {
-            callback(*owned_tables[table_name]);
+            ptr = owned_tables[table_name].get();
 	}
+	callback(*ptr);
     }
 }
 

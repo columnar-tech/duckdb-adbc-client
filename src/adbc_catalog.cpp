@@ -7,7 +7,7 @@
 namespace duckdb {
 namespace adbc {
 
-optional_ptr<SchemaCatalogEntry> AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
+SchemaCatalogEntry* AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
       CreateSchemaInfo info;
       info.schema = schema_name;
       auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
@@ -62,13 +62,14 @@ void AdbcCatalog::ScanSchemas(
 
   // For each schema, create an entry in the catalog and execute the callback
   for (auto &schema_name : schema_names) {
+    SchemaCatalogEntry* ptr = nullptr;
     // Check if the schema does not exist
     if (owned_schemas.find(schema_name) == owned_schemas.end()) {
-        auto ptr = CreateCatalogEntry(schema_name);
-	callback(*ptr);
+        ptr = CreateCatalogEntry(schema_name);
     } else {
-    	callback(*owned_schemas[schema_name]);
+    	ptr = owned_schemas[schema_name].get();
     }
+    callback(*ptr);
   }
 }
 
