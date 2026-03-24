@@ -2,11 +2,20 @@
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "adbc_catalog.hpp"
+#include "adbc_schema_entry.hpp"
 
 namespace duckdb {
 namespace adbc {
 
-AdbcCatalog::~AdbcCatalog() = default;
+optional_ptr<SchemaCatalogEntry> AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
+      CreateSchemaInfo info;
+      info.schema = schema_name;
+      auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
+      auto ptr = schema_entry.get();
+      // save the entry
+      owned_schemas[schema_name] = std::move(schema_entry);
+      return ptr;
+}
 
 void AdbcCatalog::ScanSchemas(
     ClientContext &context,
@@ -55,15 +64,11 @@ void AdbcCatalog::ScanSchemas(
   for (auto &schema_name : schema_names) {
     // Check if the schema does not exist
     if (owned_schemas.find(schema_name) == owned_schemas.end()) {
-      CreateSchemaInfo info;
-      info.schema = schema_name;
-      auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
-      auto ptr = schema_entry.get();
-      // save the entry
-      owned_schemas[schema_name] = std::move(schema_entry);
+        auto ptr = CreateCatalogEntry(schema_name);
+	callback(*ptr);
+    } else {
+    	callback(*owned_schemas[schema_name]);
     }
-    // execute the callback
-    callback(*owned_schemas[schema_name]);
   }
 }
 
@@ -72,6 +77,10 @@ AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                           const EntryLookupInfo &schema_lookup,
                           OnEntryNotFound if_not_found) {
   const auto &name = schema_lookup.GetEntryName();
+  
+  if (owned_schemas.find(name) != owned_schemas.end()) {
+      return owned_schemas[name].get();
+  }
 
   // Lookup the name and see if the schema actually exists
   Private::AdbcError error = {};
@@ -109,12 +118,7 @@ AdbcCatalog::LookupSchema(CatalogTransaction transaction,
     throw IOException("Unable to find schema with name: \"%s\"", name);
   }
 
-  CreateSchemaInfo info;
-  info.schema = name;
-  auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
-  auto ptr = schema_entry.get();
-  owned_schemas[name] = std::move(schema_entry);
-  return ptr;
+  return CreateCatalogEntry(name);
 }
 
 optional_ptr<CatalogEntry>

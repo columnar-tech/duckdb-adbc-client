@@ -21,7 +21,7 @@ set(EXTENSION_SOURCES
     src/adbc_extension.cpp
     src/adbc_catalog.cpp
     src/adbc_scan.cpp
-    src/adbc_schema.cpp
+    src/adbc_schema_entry.cpp
     src/adbc_storage.cpp
     src/adbc_table_entry.cpp
     src/adbc_transaction.cpp

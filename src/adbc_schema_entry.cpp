@@ -1,15 +1,15 @@
 #include "adbc_catalog.hpp"
 #include "adbc_scan.hpp"
+#include "adbc_schema_entry.hpp"
 #include "adbc_table_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb.hpp"
 
 namespace duckdb {
 namespace adbc {
 
-AdbcSchemaEntry::~AdbcSchemaEntry() = default;
-
-void AdbcSchemaEntry::CreateTableEntry(ClientContext &context,
+optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTableEntry(ClientContext &context,
                                        const string &table_name) {
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
     auto schema_name = this->name;
@@ -36,6 +36,7 @@ void AdbcSchemaEntry::CreateTableEntry(ClientContext &context,
                                                  adbc_catalog.GetUri());
     auto ptr = table_entry.get();
     owned_tables[table_name] = std::move(table_entry);
+    return ptr;
 }
 
 optional_ptr<CatalogEntry>
@@ -43,7 +44,7 @@ AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
                              const EntryLookupInfo &lookup_info) {
     auto &table_name = lookup_info.GetEntryName();
     if (owned_tables.find(table_name) == owned_tables.end()) {
-        CreateTableEntry(transaction.GetContext(), table_name);
+        return CreateTableEntry(transaction.GetContext(), table_name);
     }
     return owned_tables[table_name].get();
 }
@@ -62,9 +63,11 @@ void AdbcSchemaEntry::Scan(
     for (const auto &table_name :
          GetTableNamesFromSchema(adbc_catalog.GetUri(), schema_name)) {
         if (owned_tables.find(table_name) == owned_tables.end()) {
-            CreateTableEntry(context, table_name);
-        }
-        callback(*owned_tables[table_name]);
+            auto ptr = CreateTableEntry(context, table_name);
+	    callback(*ptr);
+        } else {
+            callback(*owned_tables[table_name]);
+	}
     }
 }
 

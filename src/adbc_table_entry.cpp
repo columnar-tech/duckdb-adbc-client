@@ -15,31 +15,18 @@ AdbcTableEntry::AdbcTableEntry(Catalog &catalog, SchemaCatalogEntry &schema,
     : TableCatalogEntry(catalog, schema, info),
       adbc_uri(std::move(uri)) {}
 
-//===--------------------------------------------------------------------===//
-// GetScanFunction
-// DuckDB calls this once during physical planning whenever this table
-// appears in a FROM clause.  We look up the registered read_adbc table
-// function, manually invoke its bind() with the right arguments, and
-// hand back the fully-bound function so DuckDB can execute it directly.
-//===--------------------------------------------------------------------===//
 TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context,
                                                unique_ptr<FunctionData> &bind_data) {
-    // 1. Look up the read_adbc table function that was registered at Load() time
     auto &func_entry = Catalog::GetEntry<TableFunctionCatalogEntry>(
         context, INVALID_CATALOG, DEFAULT_SCHEMA, "read_adbc");
 
-    // read_adbc(uri VARCHAR, query VARCHAR) -- match on those two arg types
     auto function = func_entry.functions.GetFunctionByArguments(
         context, {LogicalType::VARCHAR, LogicalType::VARCHAR});
 
-    // 2. Build the SQL query this entry represents.
-    //    We quote both schema and table name to handle mixed-case identifiers.
     string sql = StringUtil::Format(
         "SELECT * FROM \"%s\".\"%s\"",
         schema.name, name);
 
-    // 3. Construct the bind input exactly as if the user had written:
-    //    SELECT * FROM read_adbc('<uri>', '<sql>')
     vector<Value> inputs = {
         Value(adbc_uri),
         Value(sql)
@@ -58,10 +45,7 @@ TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context,
     vector<LogicalType> return_types;
     vector<string>      return_names;
 
-    // 4. Call bind() — this is what populates bind_data and the return types.
-    //    After this call, bind_data is fully initialised and owned by DuckDB.
     bind_data = function.bind(context, bind_input, return_types, return_names);
-
     return function;
 }
 
