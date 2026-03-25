@@ -17,9 +17,8 @@ public:
   explicit AdbcCatalog(AttachedDatabase &db, const string &uri)
       : Catalog(db), uri(uri),
         shared_connection(make_shared_ptr<SharedAdbcConnection>()) {
-    InitializeDatabase(shared_connection->GetDatabase(), uri);
-    InitializeConnection(shared_connection->GetDatabase(),
-                         shared_connection->GetConnection());
+    InitializeDatabase(*shared_connection, uri);
+    InitializeConnection(*shared_connection);
   }
 
   bool SchemaExists(const string &schema_name);

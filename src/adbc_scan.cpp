@@ -1,5 +1,5 @@
+#include <mutex>
 #include "adbc_scan.hpp"
-#include "adbc_raii.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/function/table/arrow.hpp"
@@ -10,8 +10,11 @@ namespace adbc {
 
 using namespace Private;
 
-void InitializeDatabase(Private::AdbcDatabase *database, const string &uri) {
+void InitializeDatabase(SharedAdbcConnection &shared_connection,
+                        const string &uri) {
   // Initialize the database
+  std::lock_guard<std::mutex> connection_lock(shared_connection.GetMutex());
+  auto *database = shared_connection.GetDatabase();
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcDatabaseNew(database, &error), BinderException);
   CHECK_ADBC(AdbcDatabaseSetOption(database, "uri", uri.c_str(), &error),
@@ -22,18 +25,22 @@ void InitializeDatabase(Private::AdbcDatabase *database, const string &uri) {
   CHECK_ADBC(AdbcDatabaseInit(database, &error), BinderException);
 }
 
-void InitializeConnection(Private::AdbcDatabase *database,
-                          Private::AdbcConnection *connection) {
+void InitializeConnection(SharedAdbcConnection &shared_connection) {
   // Initialize the connection
+  std::lock_guard<std::mutex> connection_lock(shared_connection.GetMutex());
+  auto *connection = shared_connection.GetConnection();
+  auto *database = shared_connection.GetDatabase();
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcConnectionNew(connection, &error), BinderException);
   CHECK_ADBC(AdbcConnectionInit(connection, database, &error), BinderException);
 }
 
-void InitializeStatement(Private::AdbcConnection *connection,
+void InitializeStatement(SharedAdbcConnection &shared_connection,
                          Private::AdbcStatement *statement,
                          const string &query_text) {
   // Initialize the statement
+  std::lock_guard<std::mutex> connection_lock(shared_connection.GetMutex());
+  auto *connection = shared_connection.GetConnection();
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcStatementNew(connection, statement, &error), BinderException);
   CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), &error),
@@ -45,17 +52,18 @@ void InitializeStatement(Private::AdbcConnection *connection,
 class AdbcArrowStreamFactory {
 public:
   AdbcArrowStreamFactory(const string &uri, const string &query_text)
-      : database(), connection(), statement() {
-    InitializeDatabase(database.get(), uri);
-    InitializeConnection(database.get(), connection.get());
-    InitializeStatement(connection.get(), statement.get(), query_text);
+      : shared_connection(make_shared_ptr<SharedAdbcConnection>()),
+        statement() {
+    InitializeDatabase(*shared_connection, uri);
+    InitializeConnection(*shared_connection);
+    InitializeStatement(*shared_connection, statement.get(), query_text);
   }
 
+  std::mutex &GetMutex() { return shared_connection->GetMutex(); }
   AdbcStatement *GetStatement() { return statement.get(); }
 
 private:
-  Handle<Private::AdbcDatabase> database;
-  Handle<Private::AdbcConnection> connection;
+  shared_ptr<SharedAdbcConnection> shared_connection;
   Handle<Private::AdbcStatement> statement;
 };
 
@@ -65,6 +73,7 @@ AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
   auto factory = reinterpret_cast<AdbcArrowStreamFactory *>(factory_ptr);
 
   // Create the stream for the query result
+  std::lock_guard<std::mutex> connection_lock(factory->GetMutex());
   AdbcError error = {};
   Private::ArrowArrayStream adbc_stream = {};
   int64_t rows_affected;
@@ -92,6 +101,8 @@ public:
         adbc_arrow_stream_factory(std::move(factory)) {
 
     // Retrieve and register the schema information from ADBC with DuckDB
+    std::lock_guard<std::mutex> connection_lock(
+        adbc_arrow_stream_factory->GetMutex());
     AdbcError error = {};
     auto *statement = adbc_arrow_stream_factory->GetStatement();
     auto *schema =
