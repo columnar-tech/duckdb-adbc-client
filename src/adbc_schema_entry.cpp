@@ -4,7 +4,6 @@
 #include "adbc_table_entry.hpp"
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -24,18 +23,18 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
   auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
   auto schema_name = this->name;
 
-  string sql =
-      StringUtil::Format("SELECT * FROM read_adbc('%s', 'SELECT * FROM "
-                         "\"%s\".\"%s\" LIMIT 0')",
-                         adbc_catalog.GetUri(), schema_name, table_name);
-
-  auto select_stmt = CreateViewInfo::ParseSelect(sql);
-  auto binder = Binder::CreateBinder(context);
-  auto bound_statement = binder->Bind((SQLStatement &)*select_stmt);
-
+  // Bind a SQL statement and use ADBC to retrieve the metadata for the table
+  string sql = StringUtil::Format("SELECT * FROM \"%s\".\"%s\"", schema_name,
+                                  table_name);
+  auto factory = make_uniq<AdbcArrowStreamFactory>(
+      adbc_catalog.GetSharedConnection(), sql);
+  auto bind_data =
+      make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+  auto col_names = bind_data->arrow_table.GetNames();
+  auto col_types = bind_data->arrow_table.GetTypes();
   auto table_info = make_uniq<CreateTableInfo>(*this, table_name);
-  for (idx_t i = 0; i < bound_statement.names.size(); i++) {
-    ColumnDefinition col(bound_statement.names[i], bound_statement.types[i]);
+  for (idx_t i = 0; i < col_names.size(); i++) {
+    ColumnDefinition col(col_names[i], col_types[i]);
     table_info->columns.AddColumn(std::move(col));
   }
   table_info->internal = false;
