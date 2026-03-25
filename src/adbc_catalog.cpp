@@ -1,27 +1,47 @@
-#include "duckdb.hpp"
-#include "duckdb/storage/database_size.hpp"
-#include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "adbc_catalog.hpp"
 #include "adbc_schema_entry.hpp"
-
+#include "duckdb.hpp"
+#include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/storage/database_size.hpp"
 namespace duckdb {
 namespace adbc {
 
-SchemaCatalogEntry* AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
-      CreateSchemaInfo info;
-      info.schema = schema_name;
-      auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
-      auto ptr = schema_entry.get();
-      // save the entry
-      owned_schemas[schema_name] = std::move(schema_entry);
-      return ptr;
+bool AdbcCatalog::SchemaExists(const string &schema_name) {
+  // Otherwise use ADBC to lookup the schema name
+  std::lock_guard<std::mutex> connection_lock(connection_mutex);
+  Private::AdbcError error = {};
+  Private::ArrowArrayStream stream;
+  CHECK_ADBC(AdbcConnectionGetObjects(connection.get(),
+                                      ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
+                                      schema_name.c_str(), nullptr, nullptr,
+                                      nullptr, &stream, &error),
+             IOException);
+
+  while (true) {
+    Private::ArrowArray batch = {};
+    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
+      break;
+    }
+
+    // For each catalog
+    for (int64_t i = 0; i < batch.length; ++i) {
+      Private::ArrowArray *catalog_schemas_list = batch.children[1];
+      const int32_t *offsets =
+          (const int32_t *)catalog_schemas_list->buffers[1];
+
+      // Check if the schema exists
+      if (offsets[i + 1] > offsets[i]) {
+        return true;
+      }
+    }
+    batch.release(&batch);
+  }
+  return false;
 }
 
-void AdbcCatalog::ScanSchemas(
-    ClientContext &context,
-    std::function<void(SchemaCatalogEntry &)> callback) {
-
+vector<string> AdbcCatalog::FetchSchemaNames() {
   // Lookup all schemas via ADBC
+  std::lock_guard<std::mutex> connection_lock(connection_mutex);
   Private::AdbcError error = {};
   Private::ArrowArrayStream stream;
   CHECK_ADBC(AdbcConnectionGetObjects(
@@ -59,17 +79,111 @@ void AdbcCatalog::ScanSchemas(
     batch.release(&batch);
   }
   stream.release(&stream);
+  return schema_names;
+}
 
-  // For each schema, create an entry in the catalog and execute the callback
-  for (auto &schema_name : schema_names) {
-    SchemaCatalogEntry* ptr = nullptr;
-    // Check if the schema does not exist
-    if (owned_schemas.find(schema_name) == owned_schemas.end()) {
-        ptr = CreateCatalogEntry(schema_name);
-    } else {
-    	ptr = owned_schemas[schema_name].get();
+vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
+  std::lock_guard<std::mutex> connection_lock(connection_mutex);
+  vector<string> table_names;
+  Private::AdbcError error = {};
+
+  // Fetch the hierarchical objects from the connection
+  Private::ArrowArrayStream stream;
+  CHECK_ADBC(AdbcConnectionGetObjects(connection.get(),
+                                      ADBC_OBJECT_DEPTH_TABLES, nullptr,
+                                      schema_name.c_str(), nullptr, nullptr,
+                                      nullptr, &stream, &error),
+             BinderException);
+
+  // Iterate the results
+  while (true) {
+    Private::ArrowArray batch = {};
+    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
+      break;
     }
-    callback(*ptr);
+
+    // Get the catalogs
+    Private::ArrowArray *catalogs = &batch;
+    Private::ArrowArray *catalog_schemas_list = batch.children[1];
+    for (int64_t i = 0; i < catalogs->length; ++i) {
+      const int32_t *schema_offsets =
+          (const int32_t *)catalog_schemas_list->buffers[1];
+      int32_t schema_start = schema_offsets[i];
+      int32_t schema_end = schema_offsets[i + 1];
+
+      Private::ArrowArray *schemas_struct = catalog_schemas_list->children[0];
+
+      // Get the schemas for this catalog
+      for (int32_t j = schema_start; j < schema_end; ++j) {
+        Private::ArrowArray *tables_list = schemas_struct->children[1];
+        const int32_t *table_offsets = (const int32_t *)tables_list->buffers[1];
+        int32_t table_start = table_offsets[j];
+        int32_t table_end = table_offsets[j + 1];
+
+        Private::ArrowArray *table_struct = tables_list->children[0];
+        Private::ArrowArray *table_names_array = table_struct->children[0];
+
+        const int32_t *name_offsets =
+            (const int32_t *)table_names_array->buffers[1];
+        const char *name_data = (const char *)table_names_array->buffers[2];
+
+        // Get the tables for each schema
+        for (int32_t k = table_start; k < table_end; ++k) {
+          int32_t start = name_offsets[k];
+          int32_t end = name_offsets[k + 1];
+          table_names.emplace_back(name_data + start, end - start);
+        }
+      }
+    }
+    batch.release(&batch);
+  }
+  stream.release(&stream);
+  return table_names;
+}
+
+SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
+  // acquire the read lock and lookup the catalog entry
+  std::shared_lock<std::shared_mutex> read_lock(schemas_mutex);
+  auto it = owned_schemas.find(schema_name);
+  if (it != owned_schemas.end()) {
+    return it->second.get();
+  }
+  return nullptr;
+}
+
+SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
+  // acquire the write lock and insert the entry into the catalog
+  std::unique_lock<std::shared_mutex> write_lock(schemas_mutex);
+
+  // return the entry if it already exists
+  auto it = owned_schemas.find(schema_name);
+  if (it != owned_schemas.end()) {
+    return it->second.get();
+  }
+
+  // create an insert the entry
+  CreateSchemaInfo info;
+  info.schema = schema_name;
+  auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
+
+  // otherwise insert the entry and return it
+  auto ptr = schema_entry.get();
+  owned_schemas[schema_name] = std::move(schema_entry);
+  return ptr;
+}
+
+void AdbcCatalog::ScanSchemas(
+    ClientContext &context,
+    std::function<void(SchemaCatalogEntry &)> callback) {
+
+  // For each schema, create an entry in the catalog (if it doesn't already
+  // exist) and execute the callback
+  for (auto &schema_name : FetchSchemaNames()) {
+    if (auto *entry = GetCatalogEntry(schema_name)) {
+      callback(*entry);
+    } else {
+      callback(*CreateCatalogEntry(schema_name));
+    }
   }
 }
 
@@ -77,48 +191,19 @@ optional_ptr<SchemaCatalogEntry>
 AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                           const EntryLookupInfo &schema_lookup,
                           OnEntryNotFound if_not_found) {
+
+  // Return the entry if it already exists
   const auto &name = schema_lookup.GetEntryName();
-  
-  if (owned_schemas.find(name) != owned_schemas.end()) {
-      return owned_schemas[name].get();
+  if (auto *entry = GetCatalogEntry(name)) {
+    return entry;
   }
 
-  // Lookup the name and see if the schema actually exists
-  Private::AdbcError error = {};
-  Private::ArrowArrayStream stream;
-  CHECK_ADBC(AdbcConnectionGetObjects(
-                 connection.get(), ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
-                 name.c_str(), nullptr, nullptr, nullptr, &stream, &error),
-             IOException);
-
-  bool exists = false;
-  while (true) {
-    Private::ArrowArray batch = {};
-    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
-      break;
-    }
-
-    // For each catalog
-    for (int64_t i = 0; i < batch.length; ++i) {
-      Private::ArrowArray *catalog_schemas_list = batch.children[1];
-      const int32_t *offsets =
-          (const int32_t *)catalog_schemas_list->buffers[1];
-
-      // Is there a schema?
-      if (offsets[i + 1] > offsets[i]) {
-        exists = true;
-        break;
-      }
-    }
-    batch.release(&batch);
-    if (exists)
-      break;
-  }
-
-  if (!exists) {
+  // Throw an exception if the schema doesn't exist
+  if (!SchemaExists(name)) {
     throw IOException("Unable to find schema with name: \"%s\"", name);
   }
 
+  // Otherwise add it to the catalog and return it
   return CreateCatalogEntry(name);
 }
 

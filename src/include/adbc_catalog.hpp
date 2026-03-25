@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include <shared_mutex>
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -19,12 +20,17 @@ public:
     InitializeConnection(database.get(), connection.get());
   }
 
+  bool SchemaExists(const string &schema_name);
+  vector<string> FetchSchemaNames();
+  vector<string> FetchTableNames(const string &schema_name);
+
   const string &GetUri() const { return uri; }
 
   void Initialize(bool load_builtin) override {}
   string GetCatalogType() override { return "adbc"; }
 
-  SchemaCatalogEntry* CreateCatalogEntry(const string &schema_name); 
+  SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
+  SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
   void ScanSchemas(ClientContext &context,
                    std::function<void(SchemaCatalogEntry &)> callback) override;
   optional_ptr<SchemaCatalogEntry>
@@ -63,11 +69,11 @@ public:
 private:
   string uri;
   Handle<Private::AdbcDatabase> database = {};
+  std::mutex connection_mutex;
   Handle<Private::AdbcConnection> connection = {};
   std::shared_mutex schemas_mutex;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };
-
 
 } // namespace adbc
 } // namespace duckdb

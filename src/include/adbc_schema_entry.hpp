@@ -2,16 +2,18 @@
 
 #include <shared_mutex>
 #include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 
 namespace duckdb {
-namespace adbc { 	
+namespace adbc {
 
 class AdbcSchemaEntry : public SchemaCatalogEntry {
 public:
   AdbcSchemaEntry(Catalog &catalog, CreateSchemaInfo &info)
       : SchemaCatalogEntry(catalog, info) {}
 
-  CatalogEntry* CreateTableEntry(ClientContext &context, const string &table_name);
+  CatalogEntry *GetOrCreateTableEntry(ClientContext &context,
+                                      const string &table_name);
 
   optional_ptr<CatalogEntry>
   LookupEntry(CatalogTransaction transaction,

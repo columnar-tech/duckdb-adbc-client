@@ -18,8 +18,5 @@ void InitializeConnection(Private::AdbcDatabase *database,
 void InitializeStatement(Private::AdbcConnection *connection,
                          Private::AdbcStatement *statement,
                          const string &query_text);
-vector<string> GetTableNamesFromConnection(Private::AdbcConnection *connection);
-vector<string> GetTableNamesFromSchema(const string &uri,
-                                       const string &schema_name);
 } // namespace adbc
 } // namespace duckdb
