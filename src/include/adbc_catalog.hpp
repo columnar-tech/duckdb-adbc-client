@@ -21,6 +21,9 @@ public:
     InitializeConnection(*shared_connection);
   }
 
+  shared_ptr<SharedAdbcConnection> GetSharedConnection() {
+    return shared_connection;
+  }
   bool SchemaExists(const string &schema_name);
   vector<string> FetchSchemaNames();
   vector<string> FetchTableNames(const string &schema_name);

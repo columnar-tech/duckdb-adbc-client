@@ -39,8 +39,7 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
     table_info->columns.AddColumn(std::move(col));
   }
   table_info->internal = false;
-  auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info,
-                                               adbc_catalog.GetUri());
+  auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
 
   // Now acquire the write lock and try to insert the entry
   std::unique_lock<std::shared_mutex> write_lock(tables_mutex);

@@ -1,75 +1,61 @@
 #include "adbc_table_entry.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/table_function_catalog_entry.hpp"
+#include "adbc_scan.hpp"
+#include "adbc_catalog.hpp"
 #include "duckdb/main/client_context.hpp"
-#include "duckdb/parser/parsed_data/create_view_info.hpp"
-#include "duckdb/planner/binder.hpp"
-#include "duckdb/planner/operator/logical_get.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
 
 namespace duckdb {
+namespace adbc {
 
 AdbcTableEntry::AdbcTableEntry(Catalog &catalog, SchemaCatalogEntry &schema,
-                                CreateTableInfo &info, string uri)
-    : TableCatalogEntry(catalog, schema, info),
-      adbc_uri(std::move(uri)) {}
+                               CreateTableInfo &info)
+    : TableCatalogEntry(catalog, schema, info) {}
 
-TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context,
-                                               unique_ptr<FunctionData> &bind_data) {
-    auto &func_entry = Catalog::GetEntry<TableFunctionCatalogEntry>(
-        context, INVALID_CATALOG, DEFAULT_SCHEMA, "read_adbc");
+TableFunction
+AdbcTableEntry::GetScanFunction(ClientContext &context,
+                                unique_ptr<FunctionData> &bind_data) {
 
-    auto function = func_entry.functions.GetFunctionByArguments(
-        context, {LogicalType::VARCHAR, LogicalType::VARCHAR});
+  // construct an ADBC scan function using the Catalog's connection object
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  auto qualified_name = StringUtil::Format("\"%s\".\"%s\"", schema.name, name);
+  auto sql = "SELECT * FROM " + qualified_name;
+  auto adbc_arrow_stream_factory = make_uniq<AdbcArrowStreamFactory>(
+      adbc_catalog.GetSharedConnection(), sql);
+  auto arrow_function_data = make_uniq<AdbcArrowScanFunctionData>(
+      context, std::move(adbc_arrow_stream_factory));
+  arrow_function_data->all_types = arrow_function_data->arrow_table.GetTypes();
+  bind_data = std::move(arrow_function_data);
 
-    string sql = StringUtil::Format(
-        "SELECT * FROM \"%s\".\"%s\"",
-        schema.name, name);
-
-    vector<Value> inputs = {
-        Value(adbc_uri),
-        Value(sql)
-    };
-    named_parameter_map_t named_params;
-    vector<LogicalType>   input_table_types;
-    vector<string>        input_table_names;
-
-    TableFunctionRef empty_ref;
-    TableFunctionBindInput bind_input(
-        inputs, named_params,
-        input_table_types, input_table_names,
-        function.function_info.get(), nullptr,
-       	function, empty_ref);
-
-    vector<LogicalType> return_types;
-    vector<string>      return_names;
-
-    bind_data = function.bind(context, bind_input, return_types, return_names);
-    return function;
+  TableFunction scan_adbc_function(
+      "scan_adbc", {},
+      adbc::AdbcScanFunction,                  // Custom ADBC scan
+      nullptr,                                 // Already bound
+      ArrowTableFunction::ArrowScanInitGlobal, // Use DuckDB's init
+      ArrowTableFunction::ArrowScanInitLocal); // Use DuckDB's init local
+  scan_adbc_function.cardinality =
+      [](ClientContext &context,
+         const FunctionData *bind_data) -> unique_ptr<NodeStatistics> {
+    return make_uniq<NodeStatistics>();
+  };
+  scan_adbc_function.projection_pushdown = true;
+  scan_adbc_function.filter_pushdown = false;
+  return scan_adbc_function;
 }
 
-//===--------------------------------------------------------------------===//
-// Stubs
-//===--------------------------------------------------------------------===//
-
 unique_ptr<BaseStatistics> AdbcTableEntry::GetStatistics(ClientContext &context,
-                                                           column_t column_id) {
-    // No statistics available from a generic ADBC source.
-    // Returning nullptr tells DuckDB's optimizer to use default estimates.
-    return nullptr;
+                                                         column_t column_id) {
+  return nullptr;
 }
 
 TableStorageInfo AdbcTableEntry::GetStorageInfo(ClientContext &context) {
-    // Remote table — no local storage info.
-    return TableStorageInfo();
+  return TableStorageInfo();
 }
 
 void AdbcTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get,
-                                            LogicalProjection &proj,
-                                            LogicalUpdate &update,
-                                            ClientContext &context) {
-    throw NotImplementedException("UPDATE is not supported on ADBC tables");
+                                           LogicalProjection &proj,
+                                           LogicalUpdate &update,
+                                           ClientContext &context) {
+  throw NotImplementedException("UPDATE is not supported on ADBC tables");
 }
 
+} // namespace adbc
 } // namespace duckdb

@@ -2,7 +2,6 @@
 #include "adbc_scan.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
-#include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 
 namespace duckdb {
@@ -47,25 +46,26 @@ void InitializeStatement(SharedAdbcConnection &shared_connection,
              BinderException);
 }
 
-// A factory class that holds the ADBC connection state and produces
-// ArrowArrayStreamWrapper instances
-class AdbcArrowStreamFactory {
-public:
-  AdbcArrowStreamFactory(const string &uri, const string &query_text)
-      : shared_connection(make_shared_ptr<SharedAdbcConnection>()),
-        statement() {
-    InitializeDatabase(*shared_connection, uri);
-    InitializeConnection(*shared_connection);
-    InitializeStatement(*shared_connection, statement.get(), query_text);
-  }
+AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri,
+                                               const string &query_text)
+    : shared_connection(make_shared_ptr<SharedAdbcConnection>()), statement() {
+  InitializeDatabase(*shared_connection, uri);
+  InitializeConnection(*shared_connection);
+  InitializeStatement(*shared_connection, statement.get(), query_text);
+}
 
-  std::mutex &GetMutex() { return shared_connection->GetMutex(); }
-  AdbcStatement *GetStatement() { return statement.get(); }
+AdbcArrowStreamFactory::AdbcArrowStreamFactory(
+    shared_ptr<SharedAdbcConnection> connection, const string &query_text)
+    : shared_connection(connection), statement() {
+  InitializeStatement(*shared_connection, statement.get(), query_text);
+}
 
-private:
-  shared_ptr<SharedAdbcConnection> shared_connection;
-  Handle<Private::AdbcStatement> statement;
-};
+std::mutex &AdbcArrowStreamFactory::GetMutex() {
+  return shared_connection->GetMutex();
+}
+AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
+  return statement.get();
+}
 
 unique_ptr<ArrowArrayStreamWrapper>
 AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
@@ -89,33 +89,24 @@ AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
   return wrapper;
 }
 
-// A wrapper class to take ownership of the factory object (and the
-// corresponding ADBC state) during the scan
-class AdbcArrowScanFunctionData : public ArrowScanFunctionData {
-public:
-  // Pass the factory and the factory function that creates an ArrowArrayStream
-  AdbcArrowScanFunctionData(ClientContext &context,
-                            unique_ptr<AdbcArrowStreamFactory> factory)
-      : ArrowScanFunctionData(AdbcProduceArrowScan,
-                              reinterpret_cast<uintptr_t>(factory.get())),
-        adbc_arrow_stream_factory(std::move(factory)) {
+AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(
+    ClientContext &context, unique_ptr<AdbcArrowStreamFactory> factory)
+    : ArrowScanFunctionData(AdbcProduceArrowScan,
+                            reinterpret_cast<uintptr_t>(factory.get())),
+      adbc_arrow_stream_factory(std::move(factory)) {
 
-    // Retrieve and register the schema information from ADBC with DuckDB
-    std::lock_guard<std::mutex> connection_lock(
-        adbc_arrow_stream_factory->GetMutex());
-    AdbcError error = {};
-    auto *statement = adbc_arrow_stream_factory->GetStatement();
-    auto *schema =
-        reinterpret_cast<Private::ArrowSchema *>(&schema_root.arrow_schema);
-    CHECK_ADBC(AdbcStatementExecuteSchema(statement, schema, &error),
-               BinderException);
-    ArrowTableFunction::PopulateArrowTableSchema(
-        DBConfig::GetConfig(context), arrow_table, schema_root.arrow_schema);
-  }
-
-private:
-  unique_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
-};
+  // Retrieve and register the schema information from ADBC with DuckDB
+  std::lock_guard<std::mutex> connection_lock(
+      adbc_arrow_stream_factory->GetMutex());
+  AdbcError error = {};
+  auto *statement = adbc_arrow_stream_factory->GetStatement();
+  auto *schema =
+      reinterpret_cast<Private::ArrowSchema *>(&schema_root.arrow_schema);
+  CHECK_ADBC(AdbcStatementExecuteSchema(statement, schema, &error),
+             BinderException);
+  ArrowTableFunction::PopulateArrowTableSchema(
+      DBConfig::GetConfig(context), arrow_table, schema_root.arrow_schema);
+}
 
 void AdbcScanFunction(ClientContext &context, TableFunctionInput &input,
                       DataChunk &output) {
