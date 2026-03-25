@@ -8,10 +8,10 @@ namespace adbc {
 
 bool AdbcCatalog::SchemaExists(const string &schema_name) {
   // Otherwise use ADBC to lookup the schema name
-  std::lock_guard<std::mutex> connection_lock(connection_mutex);
+  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
   Private::ArrowArrayStream stream;
-  CHECK_ADBC(AdbcConnectionGetObjects(connection.get(),
+  CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(),
                                       ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
                                       schema_name.c_str(), nullptr, nullptr,
                                       nullptr, &stream, &error),
@@ -41,12 +41,13 @@ bool AdbcCatalog::SchemaExists(const string &schema_name) {
 
 vector<string> AdbcCatalog::FetchSchemaNames() {
   // Lookup all schemas via ADBC
-  std::lock_guard<std::mutex> connection_lock(connection_mutex);
+  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
   Private::ArrowArrayStream stream;
-  CHECK_ADBC(AdbcConnectionGetObjects(
-                 connection.get(), ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
-                 nullptr, nullptr, nullptr, nullptr, &stream, &error),
+  CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(),
+                                      ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
+                                      nullptr, nullptr, nullptr, nullptr,
+                                      &stream, &error),
              IOException);
 
   // Collect all schema names from the result
@@ -83,13 +84,13 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
 }
 
 vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
-  std::lock_guard<std::mutex> connection_lock(connection_mutex);
+  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   vector<string> table_names;
   Private::AdbcError error = {};
 
   // Fetch the hierarchical objects from the connection
   Private::ArrowArrayStream stream;
-  CHECK_ADBC(AdbcConnectionGetObjects(connection.get(),
+  CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(),
                                       ADBC_OBJECT_DEPTH_TABLES, nullptr,
                                       schema_name.c_str(), nullptr, nullptr,
                                       nullptr, &stream, &error),

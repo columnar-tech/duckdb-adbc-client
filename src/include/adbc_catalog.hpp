@@ -15,9 +15,11 @@ namespace adbc {
 class AdbcCatalog : public Catalog {
 public:
   explicit AdbcCatalog(AttachedDatabase &db, const string &uri)
-      : Catalog(db), uri(uri) {
-    InitializeDatabase(database.get(), uri);
-    InitializeConnection(database.get(), connection.get());
+      : Catalog(db), uri(uri),
+        shared_connection(make_shared_ptr<SharedAdbcConnection>()) {
+    InitializeDatabase(shared_connection->GetDatabase(), uri);
+    InitializeConnection(shared_connection->GetDatabase(),
+                         shared_connection->GetConnection());
   }
 
   bool SchemaExists(const string &schema_name);
@@ -68,9 +70,7 @@ public:
 
 private:
   string uri;
-  Handle<Private::AdbcDatabase> database = {};
-  std::mutex connection_mutex;
-  Handle<Private::AdbcConnection> connection = {};
+  shared_ptr<SharedAdbcConnection> shared_connection;
   std::shared_mutex schemas_mutex;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };

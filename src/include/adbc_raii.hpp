@@ -1,5 +1,7 @@
 #pragma once
 
+#include <mutex>
+#include <memory>
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include <string>
@@ -104,6 +106,16 @@ template <typename Resource> struct Handle {
   Resource *operator->() { return &value; }
 
   Resource *get() { return &value; }
+};
+
+struct SharedAdbcConnection {
+  std::mutex &GetMutex() { return connection_mutex; }
+  Private::AdbcConnection *GetConnection() { return connection.get(); }
+  Private::AdbcDatabase *GetDatabase() { return database.get(); }
+
+  std::mutex connection_mutex;
+  Handle<Private::AdbcConnection> connection = {};
+  Handle<Private::AdbcDatabase> database = {};
 };
 
 } // namespace adbc
