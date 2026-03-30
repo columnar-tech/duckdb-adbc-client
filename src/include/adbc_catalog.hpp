@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <mutex>
 #include <shared_mutex>
 #include "duckdb/catalog/catalog.hpp"
@@ -69,6 +70,11 @@ public:
                                PhysicalPlanGenerator &planner,
                                LogicalUpdate &op,
                                PhysicalOperator &plan) override;
+
+private:
+  void ForEachCatalog(
+    const char *schema_name, int depth,
+    const std::function<void(Private::ArrowArray *)> &callback); 
 
 private:
   string uri;
