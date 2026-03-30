@@ -9,6 +9,8 @@ namespace adbc {
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(Private::ArrowArray *)> &callback) {
+
+    // Lock the connection and retrieve the catalog info from the ADBC connection 
     std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
     Private::AdbcError error = {};
     Handle<Private::ArrowArrayStream> stream = {};
@@ -35,10 +37,9 @@ bool AdbcCatalog::SchemaExists(const string &schema_name) {
     bool exists = false;
     ForEachCatalog(schema_name.c_str(), ADBC_OBJECT_DEPTH_DB_SCHEMAS,
                    [&exists](Private::ArrowArray *batch) {
-                       Private::ArrowArray *catalog_schemas_list =
-                           batch->children[1];
-                       const int32_t *offsets =
-                           (const int32_t *)catalog_schemas_list->buffers[1];
+                       auto *catalog_schemas_list = batch->children[1];
+                       auto *offsets = reinterpret_cast<const int32_t *>(
+                           catalog_schemas_list->buffers[1]);
                        for (int64_t i = 0; i < batch->length; ++i) {
                            // Check if schema exists
                            if (offsets[i + 1] > offsets[i]) {
@@ -57,23 +58,23 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
     ForEachCatalog(
         nullptr, ADBC_OBJECT_DEPTH_DB_SCHEMAS,
         [&schema_names](Private::ArrowArray *batch) {
-            Private::ArrowArray *catalog_schemas_list = batch->children[1];
+            auto *catalog_schemas_list = batch->children[1];
             for (int64_t i = 0; i < batch->length; ++i) {
-                const int32_t *schema_offsets =
-                    (const int32_t *)catalog_schemas_list->buffers[1];
-                int32_t start_idx = schema_offsets[i];
-                int32_t end_idx = schema_offsets[i + 1];
+                auto *schema_offsets = reinterpret_cast<const int32_t *>(
+                    catalog_schemas_list->buffers[1]);
+                auto start_idx = schema_offsets[i];
+                auto end_idx = schema_offsets[i + 1];
 
-                Private::ArrowArray *schemas_struct =
-                    catalog_schemas_list->children[0];
-                Private::ArrowArray *name_array = schemas_struct->children[0];
-                const int32_t *name_offsets =
-                    (const int32_t *)name_array->buffers[1];
-                const char *name_data = (const char *)name_array->buffers[2];
+                auto *schemas_struct = catalog_schemas_list->children[0];
+                auto *name_array = schemas_struct->children[0];
+                auto *name_offsets =
+                    reinterpret_cast<const int32_t *>(name_array->buffers[1]);
+                auto *name_data =
+                    reinterpret_cast<const char *>(name_array->buffers[2]);
 
                 for (int32_t j = start_idx; j < end_idx; ++j) {
-                    int32_t name_start = name_offsets[j];
-                    int32_t name_end = name_offsets[j + 1];
+                    auto name_start = name_offsets[j];
+                    auto name_end = name_offsets[j + 1];
                     schema_names.emplace_back(name_data + name_start,
                                               name_end - name_start);
                 }
@@ -90,40 +91,36 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
         schema_name.c_str(), ADBC_OBJECT_DEPTH_TABLES,
         [&table_names](Private::ArrowArray *batch) {
             // Get the catalogs
-            Private::ArrowArray *catalogs = batch;
-            Private::ArrowArray *catalog_schemas_list = batch->children[1];
+            auto *catalogs = batch;
+            auto *catalog_schemas_list = batch->children[1];
             for (int64_t i = 0; i < catalogs->length; ++i) {
-                const int32_t *schema_offsets =
-                    (const int32_t *)catalog_schemas_list->buffers[1];
-                int32_t schema_start = schema_offsets[i];
-                int32_t schema_end = schema_offsets[i + 1];
+                auto *schema_offsets = reinterpret_cast<const int32_t *>(
+                    catalog_schemas_list->buffers[1]);
+                auto schema_start = schema_offsets[i];
+                auto schema_end = schema_offsets[i + 1];
 
-                Private::ArrowArray *schemas_struct =
-                    catalog_schemas_list->children[0];
+                auto *schemas_struct = catalog_schemas_list->children[0];
 
                 // Get the schemas for this catalog
                 for (int32_t j = schema_start; j < schema_end; ++j) {
-                    Private::ArrowArray *tables_list =
-                        schemas_struct->children[1];
-                    const int32_t *table_offsets =
-                        (const int32_t *)tables_list->buffers[1];
-                    int32_t table_start = table_offsets[j];
-                    int32_t table_end = table_offsets[j + 1];
+                    auto *tables_list = schemas_struct->children[1];
+                    auto *table_offsets = reinterpret_cast<const int32_t *>(
+                        tables_list->buffers[1]);
+                    auto table_start = table_offsets[j];
+                    auto table_end = table_offsets[j + 1];
 
-                    Private::ArrowArray *table_struct =
-                        tables_list->children[0];
-                    Private::ArrowArray *table_names_array =
-                        table_struct->children[0];
+                    auto *table_struct = tables_list->children[0];
+                    auto *table_names_array = table_struct->children[0];
 
-                    const int32_t *name_offsets =
-                        (const int32_t *)table_names_array->buffers[1];
-                    const char *name_data =
-                        (const char *)table_names_array->buffers[2];
+                    auto *name_offsets = reinterpret_cast<const int32_t *>(
+                        table_names_array->buffers[1]);
+                    auto *name_data = reinterpret_cast<const char *>(
+                        table_names_array->buffers[2]);
 
                     // Get the tables for each schema
                     for (int32_t k = table_start; k < table_end; ++k) {
-                        int32_t start = name_offsets[k];
-                        int32_t end = name_offsets[k + 1];
+                        auto start = name_offsets[k];
+                        auto end = name_offsets[k + 1];
                         table_names.emplace_back(name_data + start,
                                                  end - start);
                     }
