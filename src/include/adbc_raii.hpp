@@ -114,8 +114,8 @@ struct SharedAdbcConnection {
   Private::AdbcDatabase *GetDatabase() { return database.get(); }
 
   std::mutex connection_mutex;
-  Handle<Private::AdbcConnection> connection = {};
   Handle<Private::AdbcDatabase> database = {};
+  Handle<Private::AdbcConnection> connection = {};
 };
 
 } // namespace adbc

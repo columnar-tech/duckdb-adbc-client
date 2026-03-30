@@ -7,7 +7,6 @@ namespace duckdb {
 namespace adbc {
 
 static unique_ptr<Catalog> AdbcAttach(optional_ptr<StorageExtensionInfo> storage_info, ClientContext &context, AttachedDatabase &db, const string &name, AttachInfo &info, AttachOptions &attach_options) {
-	auto &config = DBConfig::GetConfig(context);
 	auto uri = info.path;
 	return make_uniq<AdbcCatalog>(db, uri);
 }
