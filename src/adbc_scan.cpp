@@ -31,8 +31,6 @@ void InitializeConnection(SharedAdbcConnection &shared_connection) {
   auto *database = shared_connection.GetDatabase();
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcConnectionNew(connection, &error), BinderException);
-  // CHECK_ADBC(AdbcConnectionSetOption(connection,
-  // ADBC_CONNECTION_OPTION_READ_ONLY, "true", &error), BinderException);
   CHECK_ADBC(AdbcConnectionInit(connection, database, &error), BinderException);
 }
 
