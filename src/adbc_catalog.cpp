@@ -8,7 +8,7 @@ namespace adbc {
 
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
-    const std::function<void(Private::ArrowArray *)> &callback) {
+    const std::function<bool(Private::ArrowArray *)> &callback) {
     std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
     Private::AdbcError error = {};
     Handle<Private::ArrowArrayStream> stream = {};
@@ -24,7 +24,9 @@ void AdbcCatalog::ForEachCatalog(
             break;
         }
         // Execute the callback on the batch
-        callback(batch.get());
+        if (!callback(batch.get())) {
+            return;
+        }
     }
 }
 
@@ -41,8 +43,10 @@ bool AdbcCatalog::SchemaExists(const string &schema_name) {
                            // Check if schema exists
                            if (offsets[i + 1] > offsets[i]) {
                                exists = true;
+                               return false;
                            }
                        }
+                       return true;
                    });
     return exists;
 }
@@ -74,6 +78,7 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
                                               name_end - name_start);
                 }
             }
+            return true;
         });
     return schema_names;
 }
@@ -124,6 +129,7 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
                     }
                 }
             }
+            return true;
         });
     return table_names;
 }

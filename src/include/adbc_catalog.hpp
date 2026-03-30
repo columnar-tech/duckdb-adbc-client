@@ -74,7 +74,7 @@ public:
 private:
   void ForEachCatalog(
     const char *schema_name, int depth,
-    const std::function<void(Private::ArrowArray *)> &callback); 
+    const std::function<bool(Private::ArrowArray *)> &callback); 
 
 private:
   string uri;
