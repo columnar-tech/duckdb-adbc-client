@@ -2,7 +2,6 @@
 #include "adbc_catalog.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_table_entry.hpp"
-#include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {

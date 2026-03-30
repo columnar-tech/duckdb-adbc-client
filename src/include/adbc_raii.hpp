@@ -1,10 +1,11 @@
 #pragma once
 
+#include <cstring>
 #include <mutex>
 #include <memory>
+#include <string>
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
-#include <string>
 
 namespace duckdb {
 namespace adbc {

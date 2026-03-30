@@ -75,7 +75,7 @@ AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
   // Create the stream for the query result
   std::lock_guard<std::mutex> connection_lock(factory->GetMutex());
   AdbcError error = {};
-  Private::ArrowArrayStream adbc_stream = {};
+  ArrowArrayStream adbc_stream = {};
   int64_t rows_affected;
   CHECK_ADBC(AdbcStatementExecuteQuery(factory->GetStatement(), &adbc_stream,
                                        &rows_affected, &error),
@@ -84,7 +84,7 @@ AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
   // Create and return the wrapper owning the stream for DuckDB
   auto wrapper = make_uniq<ArrowArrayStreamWrapper>();
   std::memcpy(&wrapper->arrow_array_stream, &adbc_stream,
-              sizeof(Private::ArrowArrayStream));
+              sizeof(ArrowArrayStream));
   wrapper->number_of_rows = rows_affected;
   return wrapper;
 }
@@ -100,8 +100,7 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(
       adbc_arrow_stream_factory->GetMutex());
   AdbcError error = {};
   auto *statement = adbc_arrow_stream_factory->GetStatement();
-  auto *schema =
-      reinterpret_cast<Private::ArrowSchema *>(&schema_root.arrow_schema);
+  auto *schema = reinterpret_cast<ArrowSchema *>(&schema_root.arrow_schema);
   CHECK_ADBC(AdbcStatementExecuteSchema(statement, schema, &error),
              BinderException);
   ArrowTableFunction::PopulateArrowTableSchema(

@@ -1,7 +1,6 @@
 #include "adbc_storage.hpp"
 #include "adbc_catalog.hpp"
 #include "adbc_transaction.hpp"
-#include "duckdb.hpp"
 
 namespace duckdb {
 namespace adbc {

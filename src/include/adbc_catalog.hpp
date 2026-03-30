@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/arrow/arrow.hpp"
 #include "adbc_raii.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_schema_entry.hpp"
@@ -72,9 +73,8 @@ public:
                                PhysicalOperator &plan) override;
 
 private:
-  void
-  ForEachCatalog(const char *schema_name, int depth,
-                 const std::function<bool(Private::ArrowArray *)> &callback);
+  void ForEachCatalog(const char *schema_name, int depth,
+                      const std::function<bool(ArrowArray *)> &callback);
 
 private:
   string uri;

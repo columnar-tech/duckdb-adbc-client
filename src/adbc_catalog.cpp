@@ -1,6 +1,5 @@
 #include "adbc_catalog.hpp"
 #include "adbc_schema_entry.hpp"
-#include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/storage/database_size.hpp"
 namespace duckdb {
@@ -8,19 +7,19 @@ namespace adbc {
 
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
-    const std::function<bool(Private::ArrowArray *)> &callback) {
+    const std::function<bool(ArrowArray *)> &callback) {
 
   // Lock the connection and retrieve the catalog info from the ADBC connection
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
-  Handle<Private::ArrowArrayStream> stream = {};
+  Handle<ArrowArrayStream> stream = {};
   CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(), depth,
                                       nullptr, schema_name, nullptr, nullptr,
                                       nullptr, stream.get(), &error),
              IOException);
 
   while (true) {
-    Handle<Private::ArrowArray> batch = {};
+    Handle<ArrowArray> batch = {};
     if (stream->get_next(stream.get(), batch.get()) != 0 ||
         batch->release == nullptr) {
       break;
@@ -36,7 +35,7 @@ bool AdbcCatalog::SchemaExists(const string &schema_name) {
   // Check if the schema exists
   bool exists = false;
   ForEachCatalog(schema_name.c_str(), ADBC_OBJECT_DEPTH_DB_SCHEMAS,
-                 [&exists](Private::ArrowArray *batch) {
+                 [&exists](ArrowArray *batch) {
                    auto *catalog_schemas_list = batch->children[1];
                    auto *offsets = reinterpret_cast<const int32_t *>(
                        catalog_schemas_list->buffers[1]);
@@ -56,7 +55,7 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
   // Collect all schema names from the result
   vector<string> schema_names;
   ForEachCatalog(nullptr, ADBC_OBJECT_DEPTH_DB_SCHEMAS,
-                 [&schema_names](Private::ArrowArray *batch) {
+                 [&schema_names](ArrowArray *batch) {
                    auto *catalog_schemas_list = batch->children[1];
                    for (int64_t i = 0; i < batch->length; ++i) {
                      auto *schema_offsets = reinterpret_cast<const int32_t *>(
@@ -88,7 +87,7 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
   vector<string> table_names;
   ForEachCatalog(
       schema_name.c_str(), ADBC_OBJECT_DEPTH_TABLES,
-      [&table_names](Private::ArrowArray *batch) {
+      [&table_names](ArrowArray *batch) {
         // Get the catalogs
         auto *catalogs = batch;
         auto *catalog_schemas_list = batch->children[1];

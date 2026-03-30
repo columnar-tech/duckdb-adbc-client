@@ -1,5 +1,4 @@
 #include "adbc_transaction.hpp"
-#include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/attached_database.hpp"
 

@@ -1,9 +1,10 @@
 #pragma once
 
-#include "duckdb.hpp"
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/function/table/arrow.hpp"
+#include "duckdb/main/config.hpp"
 #include "adbc_raii.hpp"
 #include "adbc-vendor/adbc.hpp"
-#include "duckdb/function/table/arrow.hpp"
 
 namespace duckdb {
 namespace adbc {
