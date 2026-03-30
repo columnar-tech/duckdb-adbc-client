@@ -6,7 +6,7 @@ namespace duckdb {
 namespace adbc {
 class AdbcStorageExtension : public StorageExtension {
 public:
-	AdbcStorageExtension();
+  AdbcStorageExtension();
 };
 } // namespace adbc
 } // namespace duckdb

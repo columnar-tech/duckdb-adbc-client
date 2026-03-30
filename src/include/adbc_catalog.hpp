@@ -1,14 +1,14 @@
 #pragma once
 
-#include <functional>
-#include <mutex>
-#include <shared_mutex>
-#include "duckdb/catalog/catalog.hpp"
-#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/common/case_insensitive_map.hpp"
 #include "adbc_raii.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_schema_entry.hpp"
+#include "duckdb/catalog/catalog.hpp"
+#include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/common/case_insensitive_map.hpp"
+#include <functional>
+#include <mutex>
+#include <shared_mutex>
 
 namespace duckdb {
 namespace adbc {
@@ -72,9 +72,9 @@ public:
                                PhysicalOperator &plan) override;
 
 private:
-  void ForEachCatalog(
-    const char *schema_name, int depth,
-    const std::function<bool(Private::ArrowArray *)> &callback); 
+  void
+  ForEachCatalog(const char *schema_name, int depth,
+                 const std::function<bool(Private::ArrowArray *)> &callback);
 
 private:
   string uri;
