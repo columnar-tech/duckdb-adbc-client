@@ -10,22 +10,22 @@ bool AdbcCatalog::SchemaExists(const string &schema_name) {
   // Otherwise use ADBC to lookup the schema name
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
-  Private::ArrowArrayStream stream;
+  Handle<Private::ArrowArrayStream> stream = {};
   CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(),
                                       ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
                                       schema_name.c_str(), nullptr, nullptr,
-                                      nullptr, &stream, &error),
+                                      nullptr, stream.get(), &error),
              IOException);
 
   while (true) {
-    Private::ArrowArray batch = {};
-    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
+    Handle<Private::ArrowArray> batch = {};
+    if (stream->get_next(stream.get(), batch.get()) != 0 || batch->release == nullptr) {
       break;
     }
 
     // For each catalog
-    for (int64_t i = 0; i < batch.length; ++i) {
-      Private::ArrowArray *catalog_schemas_list = batch.children[1];
+    for (int64_t i = 0; i < batch->length; ++i) {
+      Private::ArrowArray *catalog_schemas_list = batch->children[1];
       const int32_t *offsets =
           (const int32_t *)catalog_schemas_list->buffers[1];
 
@@ -34,7 +34,6 @@ bool AdbcCatalog::SchemaExists(const string &schema_name) {
         return true;
       }
     }
-    batch.release(&batch);
   }
   return false;
 }
@@ -43,23 +42,23 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
   // Lookup all schemas via ADBC
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
-  Private::ArrowArrayStream stream;
+  Handle<Private::ArrowArrayStream> stream = {};
   CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(),
                                       ADBC_OBJECT_DEPTH_DB_SCHEMAS, nullptr,
                                       nullptr, nullptr, nullptr, nullptr,
-                                      &stream, &error),
+                                      stream.get(), &error),
              IOException);
 
   // Collect all schema names from the result
   vector<string> schema_names;
   while (true) {
-    Private::ArrowArray batch = {};
-    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
+    Handle<Private::ArrowArray> batch = {};
+    if (stream->get_next(stream.get(), batch.get()) != 0 || batch->release == nullptr) {
       break;
     }
 
-    Private::ArrowArray *catalog_schemas_list = batch.children[1];
-    for (int64_t i = 0; i < batch.length; ++i) {
+    Private::ArrowArray *catalog_schemas_list = batch->children[1];
+    for (int64_t i = 0; i < batch->length; ++i) {
       const int32_t *schema_offsets =
           (const int32_t *)catalog_schemas_list->buffers[1];
       int32_t start_idx = schema_offsets[i];
@@ -77,9 +76,7 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
                                   name_end - name_start);
       }
     }
-    batch.release(&batch);
   }
-  stream.release(&stream);
   return schema_names;
 }
 
@@ -89,23 +86,23 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
   Private::AdbcError error = {};
 
   // Fetch the hierarchical objects from the connection
-  Private::ArrowArrayStream stream;
+  Handle<Private::ArrowArrayStream> stream = {};
   CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(),
                                       ADBC_OBJECT_DEPTH_TABLES, nullptr,
                                       schema_name.c_str(), nullptr, nullptr,
-                                      nullptr, &stream, &error),
+                                      nullptr, stream.get(), &error),
              BinderException);
 
   // Iterate the results
   while (true) {
-    Private::ArrowArray batch = {};
-    if (stream.get_next(&stream, &batch) != 0 || batch.release == nullptr) {
+    Handle<Private::ArrowArray> batch = {};
+    if (stream->get_next(stream.get(), batch.get()) != 0 || batch->release == nullptr) {
       break;
     }
 
     // Get the catalogs
-    Private::ArrowArray *catalogs = &batch;
-    Private::ArrowArray *catalog_schemas_list = batch.children[1];
+    Private::ArrowArray *catalogs = batch.get();
+    Private::ArrowArray *catalog_schemas_list = batch->children[1];
     for (int64_t i = 0; i < catalogs->length; ++i) {
       const int32_t *schema_offsets =
           (const int32_t *)catalog_schemas_list->buffers[1];
@@ -136,9 +133,7 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
         }
       }
     }
-    batch.release(&batch);
   }
-  stream.release(&stream);
   return table_names;
 }
 
