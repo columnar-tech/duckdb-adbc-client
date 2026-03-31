@@ -9,8 +9,10 @@ VENDOR_PATH="./src/include/arrow-adbc"
 
 # Copy the ADBC header
 cp $ADBC_HEADER_PATH/adbc.h ./src/include/arrow-adbc/adbc.h
+
 # Fix linkage and ensure Arrow structs are redefined
-sed -i 's|extern "C"[[:space:]]*{|extern "C++" {\n#undef ARROW_FLAG_DICTIONARY_ORDERED\n#undef ARROW_C_DATA_INTERFACE\n#undef ARROW_FLAG_NULLABLE\n#undef ARROW_FLAG_MAP_KEYS_SORTED\n#undef ARROW_C_STREAM_INTERFACE|g' ./src/include/arrow-adbc/adbc.h
+sed -i 's|extern "C"[[:space:]]*{|extern "C++" {\n#endif\n/*|g' ./src/include/arrow-adbc/adbc.h
+sed -i 's|#ifndef ADBC|*/\n#ifndef ADBC|g' ./src/include/arrow-adbc/adbc.h
 
 # Copy the driver manager header 
 cp $ADBC_HEADER_PATH/adbc_driver_manager.h $VENDOR_PATH/adbc_driver_manager.h
@@ -27,6 +29,9 @@ sed -i 's|^\([[:space:]]*using namespace .*;\)|namespace Private {\n\1|' ./src/a
 sed -i -e '$a } // namespace Private' ./src/adbc_driver_manager.cpp
 # Rename headers to point to the vendored headers
 sed -i 's|"arrow-adbc/\([^"]*\)\.h"|"adbc-vendor/\1.hpp"|g' ./src/adbc_driver_manager.cpp
+
+# Add header for DuckDB's arrow headers
+sed -i 's|#include "current_arch.h"|#include "duckdb/common/arrow/arrow.hpp"\n#include "current_arch.h"|g' ./src/adbc_driver_manager.cpp
 
 # Clang-format everything to pass CI
 python3 duckdb/scripts/format.py --all --fix --noconfirm --directories src test
