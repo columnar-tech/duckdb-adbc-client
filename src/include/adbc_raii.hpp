@@ -15,7 +15,7 @@ using namespace Private;
   do {                                                                         \
     AdbcStatusCode status = (EXPR);                                            \
     if (status != ADBC_STATUS_OK) {                                            \
-      auto message = ToString(&error);                                         \
+      auto message = AdbcToString(&error);                                     \
       throw EXCEPTION_TYPE(message);                                           \
     }                                                                          \
   } while (false)
@@ -49,7 +49,7 @@ inline std::string StatusCodeToString(AdbcStatusCode code) {
   }
 #undef CASE
 }
-inline std::string ToString(struct AdbcError *error) {
+inline std::string AdbcToString(struct AdbcError *error) {
   if (error && error->message) {
     std::string result = error->message;
     error->release(error);

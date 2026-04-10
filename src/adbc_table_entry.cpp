@@ -26,7 +26,7 @@ AdbcTableEntry::GetScanFunction(ClientContext &context,
   bind_data = std::move(arrow_function_data);
 
   TableFunction scan_adbc_function(
-      "scan_adbc", {},
+      "read_adbc", {},
       adbc::AdbcScanFunction,                  // Custom ADBC scan
       nullptr,                                 // Already bound
       ArrowTableFunction::ArrowScanInitGlobal, // Use DuckDB's init

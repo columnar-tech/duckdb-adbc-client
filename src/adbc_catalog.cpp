@@ -1,15 +1,224 @@
 #include "adbc_catalog.hpp"
 #include "adbc_schema_entry.hpp"
+#include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/storage/database_size.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+
 namespace duckdb {
 namespace adbc {
+
+AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
+                       TableCatalogEntry &table,
+                       physical_index_vector_t<idx_t> column_index_map_p)
+    : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types,
+                       1),
+      table(&table), column_index_map(std::move(column_index_map_p)) {}
+
+//===--------------------------------------------------------------------===//
+// States
+//===--------------------------------------------------------------------===//
+class AdbcInsertGlobalState : public GlobalSinkState {
+public:
+  explicit AdbcInsertGlobalState(ClientContext &context,
+                                 const TableCatalogEntry &table)
+      : insert_count(0), collection(context, table.GetTypes()) {
+    auto &columns = table.GetColumns();
+    for (auto &col : columns.Logical()) {
+      column_types.push_back(col.GetType());
+      column_names.push_back(col.GetName());
+    }
+  }
+
+  idx_t insert_count;
+  vector<LogicalType> column_types;
+  vector<string> column_names;
+  ColumnDataCollection collection;
+};
+
+unique_ptr<GlobalSinkState>
+AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
+  return make_uniq<AdbcInsertGlobalState>(context, *table);
+}
+
+//===--------------------------------------------------------------------===//
+// Sink
+//===--------------------------------------------------------------------===//
+SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
+                                OperatorSinkInput &input) const {
+  auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
+  // Buffer the input chunk
+  gstate.collection.Append(chunk);
+  gstate.insert_count += chunk.size();
+  return SinkResultType::NEED_MORE_INPUT;
+}
+
+//===--------------------------------------------------------------------===//
+// Finalize
+//===--------------------------------------------------------------------===//
+SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
+                                      ClientContext &context,
+                                      OperatorSinkFinalizeInput &input) const {
+  auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
+
+  std::cout << "Insert count is: " << gstate.insert_count << std::endl;
+
+  // Get the ADBC connection
+  auto &adbc_catalog = table->catalog.Cast<AdbcCatalog>();
+  auto shared_connection = adbc_catalog.GetSharedConnection();
+  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
+  auto *connection = shared_connection->GetConnection();
+
+  // Wrap the buffered data as an ArrowArrayStream
+  Handle<ArrowArrayStream> stream = {};
+  CreateArrowStreamFromCollection(context, gstate.collection,
+                                  gstate.column_types, gstate.column_names,
+                                  stream.get());
+
+  // Create the ADBC statement to perform the insert
+  Private::AdbcError error = {};
+  Handle<Private::AdbcStatement> statement = {};
+  CHECK_ADBC(AdbcStatementNew(connection, statement.get(), &error),
+             IOException);
+  CHECK_ADBC(AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_MODE,
+                                    ADBC_INGEST_OPTION_MODE_APPEND, &error),
+             IOException);
+
+  CHECK_ADBC(AdbcStatementSetOption(statement.get(),
+                                    ADBC_INGEST_OPTION_TARGET_TABLE,
+                                    table->name.c_str(), &error),
+             IOException);
+
+  // Bind the stream to the statement
+  CHECK_ADBC(AdbcStatementBindStream(statement.get(), stream.get(), &error),
+             IOException);
+
+  // Execute the insert
+  int64_t rows_affected = 0;
+  CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), nullptr, &rows_affected,
+                                       &error),
+             IOException);
+  AdbcStatementRelease(statement.get(), &error);
+
+  std::cout << "Executed ADBC statement with rows_affected = " << rows_affected
+            << std::endl;
+
+  // Validate the affected row count
+  if (static_cast<idx_t>(rows_affected) != gstate.insert_count) {
+    throw IOException("Row count mismatch: expected %llu, got %lld",
+                      gstate.insert_count, rows_affected);
+  }
+
+  return SinkFinalizeType::READY;
+}
+
+struct ArrowStreamCollectionData {
+  ClientContext *context;
+  vector<LogicalType> types;
+  vector<string> names;
+  unique_ptr<ArrowSchema> cached_schema;
+  unique_ptr<ColumnDataScanState> scan_state;
+  ColumnDataCollection *collection;
+};
+
+void AdbcInsert::CreateArrowStreamFromCollection(
+    ClientContext &context, ColumnDataCollection &collection,
+    const vector<LogicalType> &types, const vector<string> &names,
+    ArrowArrayStream *stream) const {
+  auto *data = new ArrowStreamCollectionData();
+  data->context = &context;
+  data->types = types;
+  data->names = names;
+  data->scan_state = make_uniq<ColumnDataScanState>();
+  collection.InitializeScan(*data->scan_state);
+  data->collection = &collection;
+
+  stream->get_schema = [](ArrowArrayStream *s, ArrowSchema *out) -> int {
+    auto *d = static_cast<ArrowStreamCollectionData *>(s->private_data);
+    if (!d->cached_schema) {
+      d->cached_schema = make_uniq<ArrowSchema>();
+      auto properties = d->context->GetClientProperties();
+      ArrowConverter::ToArrowSchema(d->cached_schema.get(), d->types, d->names,
+                                    properties);
+
+      std::cout << "Arrow schema created with " << d->names.size()
+                << " columns:" << std::endl;
+      for (size_t i = 0; i < d->names.size(); i++) {
+        std::cout << "  Column " << i << ": " << d->names[i]
+                  << " (type: " << d->types[i].ToString() << ")" << std::endl;
+      }
+    }
+    memcpy(out, d->cached_schema.get(), sizeof(ArrowSchema));
+    return 0;
+  };
+
+  stream->get_next = [](ArrowArrayStream *s, ArrowArray *out) -> int {
+    auto *d = static_cast<ArrowStreamCollectionData *>(s->private_data);
+    DataChunk chunk;
+    chunk.Initialize(Allocator::DefaultAllocator(), d->types);
+
+    std::cout << "get_next called" << std::endl;
+
+    if (!d->collection->Scan(*d->scan_state, chunk)) {
+      std::cout << "Scan return false - end of stream" << std::endl;
+      out->release = nullptr;
+      return 0;
+    }
+
+    std::cout << "Scan returned chunk with " << chunk.size() << " rows"
+              << std::endl;
+
+    ArrowConverter::ToArrowArray(
+        chunk, out, d->context->GetClientProperties(),
+        ArrowTypeExtensionData::GetExtensionTypes(*d->context, d->types));
+    return 0;
+  };
+
+  stream->get_last_error = [](ArrowArrayStream *) -> const char * {
+    return nullptr;
+  };
+
+  stream->release = [](ArrowArrayStream *s) {
+    delete static_cast<ArrowStreamCollectionData *>(s->private_data);
+    s->release = nullptr;
+  };
+
+  stream->private_data = data;
+}
+
+//===--------------------------------------------------------------------===//
+// GetData
+//===--------------------------------------------------------------------===//
+//
+SourceResultType AdbcInsert::GetData(ExecutionContext &context,
+                                     DataChunk &chunk,
+                                     OperatorSourceInput &input) const {
+  auto &insert_gstate = sink_state->Cast<AdbcInsertGlobalState>();
+  chunk.SetCardinality(1);
+  chunk.SetValue(0, 0, Value::BIGINT(insert_gstate.insert_count));
+  return SourceResultType::FINISHED;
+}
+
+//===--------------------------------------------------------------------===//
+// Helpers
+//===--------------------------------------------------------------------===//
+string AdbcInsert::GetName() const { return "write_adbc"; }
+
+InsertionOrderPreservingMap<string> AdbcInsert::ParamsToString() const {
+  InsertionOrderPreservingMap<string> result;
+  result["Table"] = table->name;
+  return result;
+}
 
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
 
-  // Lock the connection and retrieve the catalog info from the ADBC connection
+  // Lock the connection and retrieve the catalog info from the Adbc
+  // connection
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
@@ -197,16 +406,18 @@ AdbcCatalog::LookupSchema(CatalogTransaction transaction,
 optional_ptr<CatalogEntry>
 AdbcCatalog::CreateSchema(CatalogTransaction transaction,
                           CreateSchemaInfo &info) {
-  throw NotImplementedException("ADBC catalog is read-only");
+  throw NotImplementedException(
+      "CREATE SCHEMA not yet supported with the ADBC extension");
 }
 
 void AdbcCatalog::DropSchema(ClientContext &context, DropInfo &info) {
-  throw NotImplementedException("ADBC catalog is read-only");
+  throw NotImplementedException(
+      "DROP SCHEMA not yet supported with the ADBC extension");
 }
 
 DatabaseSize AdbcCatalog::GetDatabaseSize(ClientContext &context) {
-  throw NotImplementedException(
-      "ADBC catalog does not support getting database size");
+  throw NotImplementedException("Getting the database size is not yet "
+                                "supported with the ADBC extension");
 }
 
 bool AdbcCatalog::InMemory() { return false; }
@@ -217,28 +428,59 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
                                                  PhysicalOperator &plan) {
-  throw NotImplementedException("ADBC catalog is read-only");
+  throw NotImplementedException(
+      "CREATE TABLE not yet supported with the ADBC extension");
+}
+
+void AdbcCatalog::HandleAdbcScans(PhysicalOperator &op) {
+  if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+    auto &table_scan = op.Cast<PhysicalTableScan>();
+    if (table_scan.function.name == "read_adbc") {
+      throw NotImplementedException(
+          "INSERT not yet supported when reading from Adbc");
+    }
+  }
+  for (auto &child : op.children) {
+    HandleAdbcScans(child);
+  }
 }
 
 PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
                                           PhysicalPlanGenerator &planner,
                                           LogicalInsert &op,
                                           optional_ptr<PhysicalOperator> plan) {
-  throw NotImplementedException("ADBC catalog is read-only");
+  if (op.return_chunk) {
+    throw BinderException(
+        "RETURNING clause not yet supported for insertion into Adbc table");
+  }
+
+  if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
+    throw BinderException("ON CONFLICT clause not yet supported for "
+                          "insertion into Adbc table");
+  }
+
+  D_ASSERT(plan);
+  HandleAdbcScans(*plan);
+
+  auto &insert = planner.Make<AdbcInsert>(op, op.table, op.column_index_map);
+  insert.children.push_back(*plan);
+  return insert;
 }
 
 PhysicalOperator &AdbcCatalog::PlanDelete(ClientContext &context,
                                           PhysicalPlanGenerator &planner,
                                           LogicalDelete &op,
                                           PhysicalOperator &plan) {
-  throw NotImplementedException("ADBC catalog is read-only");
+  throw NotImplementedException(
+      "DELETE not yet supported with the ADBC extension");
 }
 
 PhysicalOperator &AdbcCatalog::PlanUpdate(ClientContext &context,
                                           PhysicalPlanGenerator &planner,
                                           LogicalUpdate &op,
                                           PhysicalOperator &plan) {
-  throw NotImplementedException("ADBC catalog is read-only");
+  throw NotImplementedException(
+      "UPDATE not yet supported with the ADBC extension");
 }
 
 } // namespace adbc
