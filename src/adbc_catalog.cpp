@@ -432,19 +432,6 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
       "CREATE TABLE not yet supported with the ADBC extension");
 }
 
-void AdbcCatalog::HandleAdbcScans(PhysicalOperator &op) {
-  if (op.type == PhysicalOperatorType::TABLE_SCAN) {
-    auto &table_scan = op.Cast<PhysicalTableScan>();
-    if (table_scan.function.name == "read_adbc") {
-      throw NotImplementedException(
-          "INSERT not yet supported when reading from Adbc");
-    }
-  }
-  for (auto &child : op.children) {
-    HandleAdbcScans(child);
-  }
-}
-
 PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
                                           PhysicalPlanGenerator &planner,
                                           LogicalInsert &op,
@@ -460,8 +447,6 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   }
 
   D_ASSERT(plan);
-  HandleAdbcScans(*plan);
-
   auto &insert = planner.Make<AdbcInsert>(op, op.table, op.column_index_map);
   insert.children.push_back(*plan);
   return insert;

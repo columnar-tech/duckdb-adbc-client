@@ -117,7 +117,6 @@ public:
                                PhysicalOperator &plan) override;
 
 private:
-  void HandleAdbcScans(PhysicalOperator &op);
   void ForEachCatalog(const char *schema_name, int depth,
                       const std::function<bool(ArrowArray *)> &callback);
 

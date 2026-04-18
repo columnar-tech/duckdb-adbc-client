@@ -16,7 +16,7 @@ AdbcAttach(optional_ptr<StorageExtensionInfo> storage_info,
 static unique_ptr<TransactionManager>
 AdbcCreateTransactionManager(optional_ptr<StorageExtensionInfo> storage_info,
                              AttachedDatabase &db, Catalog &catalog) {
-  return make_uniq<AdbcTransactionManager>(db);
+  return make_uniq<AdbcTransactionManager>(db, catalog);
 }
 
 AdbcStorageExtension::AdbcStorageExtension() {

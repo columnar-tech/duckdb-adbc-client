@@ -1,5 +1,6 @@
 #pragma once
 
+#include "adbc_catalog.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
@@ -16,7 +17,7 @@ public:
 
 class AdbcTransactionManager : public TransactionManager {
 public:
-  explicit AdbcTransactionManager(AttachedDatabase &db);
+  explicit AdbcTransactionManager(AttachedDatabase &db, Catalog &catalog);
   ~AdbcTransactionManager() override = default;
 
   Transaction &StartTransaction(ClientContext &context) override;
@@ -26,6 +27,7 @@ public:
   void Checkpoint(ClientContext &context, bool force = false) override;
 
 private:
+  Catalog &catalog;
   mutex transaction_lock;
   reference_map_t<Transaction, unique_ptr<Transaction>> transactions;
 };
