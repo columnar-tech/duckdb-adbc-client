@@ -7,6 +7,8 @@
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/planner/operator/logical_create_table.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -64,8 +66,6 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
                                       OperatorSinkFinalizeInput &input) const {
   auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
 
-  std::cout << "Insert count is: " << gstate.insert_count << std::endl;
-
   // Get the ADBC connection
   auto &adbc_catalog = table->catalog.Cast<AdbcCatalog>();
   auto shared_connection = adbc_catalog.GetSharedConnection();
@@ -102,9 +102,6 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
                                        &error),
              IOException);
   AdbcStatementRelease(statement.get(), &error);
-
-  std::cout << "Executed ADBC statement with rows_affected = " << rows_affected
-            << std::endl;
 
   // Validate the affected row count
   if (static_cast<idx_t>(rows_affected) != gstate.insert_count) {
@@ -143,13 +140,6 @@ void AdbcInsert::CreateArrowStreamFromCollection(
       auto properties = d->context->GetClientProperties();
       ArrowConverter::ToArrowSchema(d->cached_schema.get(), d->types, d->names,
                                     properties);
-
-      std::cout << "Arrow schema created with " << d->names.size()
-                << " columns:" << std::endl;
-      for (size_t i = 0; i < d->names.size(); i++) {
-        std::cout << "  Column " << i << ": " << d->names[i]
-                  << " (type: " << d->types[i].ToString() << ")" << std::endl;
-      }
     }
     memcpy(out, d->cached_schema.get(), sizeof(ArrowSchema));
     return 0;
@@ -160,16 +150,10 @@ void AdbcInsert::CreateArrowStreamFromCollection(
     DataChunk chunk;
     chunk.Initialize(Allocator::DefaultAllocator(), d->types);
 
-    std::cout << "get_next called" << std::endl;
-
     if (!d->collection->Scan(*d->scan_state, chunk)) {
-      std::cout << "Scan return false - end of stream" << std::endl;
       out->release = nullptr;
       return 0;
     }
-
-    std::cout << "Scan returned chunk with " << chunk.size() << " rows"
-              << std::endl;
 
     ArrowConverter::ToArrowArray(
         chunk, out, d->context->GetClientProperties(),

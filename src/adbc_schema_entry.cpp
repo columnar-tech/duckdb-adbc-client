@@ -57,8 +57,12 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
 optional_ptr<CatalogEntry>
 AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
                              const EntryLookupInfo &lookup_info) {
-  return GetOrCreateTableEntry(transaction.GetContext(),
-                               lookup_info.GetEntryName());
+  try {
+    return GetOrCreateTableEntry(transaction.GetContext(),
+                                 lookup_info.GetEntryName());
+  } catch (...) {
+    return nullptr;
+  }
 }
 
 void AdbcSchemaEntry::Scan(
