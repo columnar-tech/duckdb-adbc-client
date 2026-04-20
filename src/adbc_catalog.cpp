@@ -196,8 +196,10 @@ string AdbcInsert::GetName() const {
   switch (insert_mode) {
   case InsertMode::APPEND:
     operator_name = "INSERT";
+    break;
   case InsertMode::CTAS:
     operator_name = "CREATE_TABLE_AS";
+    break;
   }
   D_ASSERT(!operator_name.empty());
   return operator_name;
