@@ -423,10 +423,18 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
                                                  PhysicalOperator &plan) {
+
+  // ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
+  // statement
+  auto &info = op.info;
+  if (info->Base().on_conflict != OnCreateConflict::ERROR_ON_CONFLICT) {
+    throw BinderException("CREATE TABLE commands not yet supported with IF NOT "
+                          "EXISTS or REPLACE with the ADBC extension");
+  }
+
   // collect column names & types
   vector<LogicalType> column_types;
   vector<string> column_names;
-  auto &info = op.info;
   for (auto &col : info->Base().columns.Logical()) {
     column_types.push_back(col.GetType());
     column_names.push_back(col.GetName());
@@ -444,12 +452,12 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
                                           optional_ptr<PhysicalOperator> plan) {
   if (op.return_chunk) {
     throw BinderException(
-        "RETURNING clause not yet supported for insertion into Adbc table");
+        "RETURNING clause not yet supported for INSERTs into an ADBC table");
   }
 
   if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
     throw BinderException("ON CONFLICT clause not yet supported for "
-                          "insertion into Adbc table");
+                          "INSERTs into ADBC table");
   }
 
   D_ASSERT(plan);
