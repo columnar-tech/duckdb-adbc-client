@@ -120,7 +120,7 @@ void AdbcInsert::CreateArrowStreamFromCollection(
     ClientContext &context, ColumnDataCollection &collection,
     const vector<LogicalType> &types, const vector<string> &names,
     ArrowArrayStream *stream) const {
-  auto *data = new ArrowStreamCollectionData();
+  auto data = make_uniq<ArrowStreamCollectionData>();
   data->context = &context;
   data->types = types;
   data->names = names;
@@ -161,11 +161,12 @@ void AdbcInsert::CreateArrowStreamFromCollection(
   };
 
   stream->release = [](ArrowArrayStream *s) {
-    delete static_cast<ArrowStreamCollectionData *>(s->private_data);
+    unique_ptr<ArrowStreamCollectionData> data(
+        static_cast<ArrowStreamCollectionData *>(s->private_data));
     s->release = nullptr;
   };
 
-  stream->private_data = data;
+  stream->private_data = data.release();
 }
 
 //===--------------------------------------------------------------------===//
