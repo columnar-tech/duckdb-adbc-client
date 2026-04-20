@@ -9,6 +9,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/index_vector.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include <functional>
 #include <mutex>
 #include <shared_mutex>
@@ -16,17 +17,20 @@
 namespace duckdb {
 namespace adbc {
 
+enum class InsertMode { APPEND, CTAS };
+
 class AdbcInsert : public PhysicalOperator {
 public:
-  //! INSERT INTO
   AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
-             TableCatalogEntry &table,
-             physical_index_vector_t<idx_t> column_index_map);
+             const vector<LogicalType> &types, const vector<string> &names,
+             const string &table_name, Catalog &catalog, InsertMode mode);
 
-  //! The table to insert into
-  optional_ptr<TableCatalogEntry> table;
-  //! column_index_map
-  physical_index_vector_t<idx_t> column_index_map;
+private:
+  vector<string> column_names;
+  vector<LogicalType> column_types;
+  string table_name;
+  Catalog &catalog;
+  InsertMode insert_mode;
 
 public:
   // Source interface

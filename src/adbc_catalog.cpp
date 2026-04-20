@@ -1,24 +1,26 @@
 #include "adbc_catalog.hpp"
 #include "adbc_schema_entry.hpp"
+#include "adbc_table_entry.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/storage/database_size.hpp"
-#include "duckdb/common/arrow/arrow_converter.hpp"
-#include "duckdb/planner/operator/logical_create_table.hpp"
-#include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 namespace duckdb {
 namespace adbc {
 
 AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
-                       TableCatalogEntry &table,
-                       physical_index_vector_t<idx_t> column_index_map_p)
+                       const vector<LogicalType> &types,
+                       const vector<string> &names, const string &table_name,
+                       Catalog &catalog, InsertMode mode)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types,
                        1),
-      table(&table), column_index_map(std::move(column_index_map_p)) {}
+      column_types(types), column_names(names), table_name(table_name),
+      catalog(catalog), insert_mode(mode) {}
 
 //===--------------------------------------------------------------------===//
 // States
@@ -26,14 +28,10 @@ AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
 class AdbcInsertGlobalState : public GlobalSinkState {
 public:
   explicit AdbcInsertGlobalState(ClientContext &context,
-                                 const TableCatalogEntry &table)
-      : insert_count(0), collection(context, table.GetTypes()) {
-    auto &columns = table.GetColumns();
-    for (auto &col : columns.Logical()) {
-      column_types.push_back(col.GetType());
-      column_names.push_back(col.GetName());
-    }
-  }
+                                 const vector<LogicalType> &types,
+                                 const vector<string> &names)
+      : insert_count(0), column_types(types), column_names(names),
+        collection(context, types) {}
 
   idx_t insert_count;
   vector<LogicalType> column_types;
@@ -43,7 +41,7 @@ public:
 
 unique_ptr<GlobalSinkState>
 AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
-  return make_uniq<AdbcInsertGlobalState>(context, *table);
+  return make_uniq<AdbcInsertGlobalState>(context, column_types, column_names);
 }
 
 //===--------------------------------------------------------------------===//
@@ -67,7 +65,7 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
   auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
 
   // Get the ADBC connection
-  auto &adbc_catalog = table->catalog.Cast<AdbcCatalog>();
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
   auto shared_connection = adbc_catalog.GetSharedConnection();
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   auto *connection = shared_connection->GetConnection();
@@ -83,13 +81,17 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
   Handle<Private::AdbcStatement> statement = {};
   CHECK_ADBC(AdbcStatementNew(connection, statement.get(), &error),
              IOException);
-  CHECK_ADBC(AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_MODE,
-                                    ADBC_INGEST_OPTION_MODE_APPEND, &error),
-             IOException);
+
+  // Set append mode only if we are doing an INSERT (not a CTAS)
+  if (insert_mode == InsertMode::APPEND) {
+    CHECK_ADBC(AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_MODE,
+                                      ADBC_INGEST_OPTION_MODE_APPEND, &error),
+               IOException);
+  }
 
   CHECK_ADBC(AdbcStatementSetOption(statement.get(),
                                     ADBC_INGEST_OPTION_TARGET_TABLE,
-                                    table->name.c_str(), &error),
+                                    table_name.c_str(), &error),
              IOException);
 
   // Bind the stream to the statement
@@ -189,18 +191,27 @@ SourceResultType AdbcInsert::GetData(ExecutionContext &context,
 //===--------------------------------------------------------------------===//
 // Helpers
 //===--------------------------------------------------------------------===//
-string AdbcInsert::GetName() const { return "write_adbc"; }
+string AdbcInsert::GetName() const {
+  string operator_name;
+  switch (insert_mode) {
+  case InsertMode::APPEND:
+    operator_name = "INSERT";
+  case InsertMode::CTAS:
+    operator_name = "CREATE_TABLE_AS";
+  }
+  D_ASSERT(!operator_name.empty());
+  return operator_name;
+}
 
 InsertionOrderPreservingMap<string> AdbcInsert::ParamsToString() const {
   InsertionOrderPreservingMap<string> result;
-  result["Table"] = table->name;
+  result["Table"] = table_name;
   return result;
 }
 
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
-
   // Lock the connection and retrieve the catalog info from the Adbc
   // connection
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
@@ -355,7 +366,6 @@ SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
 void AdbcCatalog::ScanSchemas(
     ClientContext &context,
     std::function<void(SchemaCatalogEntry &)> callback) {
-
   // For each schema, create an entry in the catalog (if it doesn't already
   // exist) and execute the callback
   for (auto &schema_name : FetchSchemaNames()) {
@@ -371,7 +381,6 @@ optional_ptr<SchemaCatalogEntry>
 AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                           const EntryLookupInfo &schema_lookup,
                           OnEntryNotFound if_not_found) {
-
   // Return the entry if it already exists
   const auto &name = schema_lookup.GetEntryName();
   if (auto *entry = GetCatalogEntry(name)) {
@@ -412,8 +421,19 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
                                                  PhysicalOperator &plan) {
-  throw NotImplementedException(
-      "CREATE TABLE not yet supported with the ADBC extension");
+  // collect column names & types
+  vector<LogicalType> column_types;
+  vector<string> column_names;
+  auto &info = op.info;
+  for (auto &col : info->Base().columns.Logical()) {
+    column_types.push_back(col.GetType());
+    column_names.push_back(col.GetName());
+  }
+  auto table_name = info->Base().table;
+  auto &insert = planner.Make<AdbcInsert>(op, column_types, column_names,
+                                          table_name, *this, InsertMode::CTAS);
+  insert.children.push_back(plan);
+  return insert;
 }
 
 PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
@@ -431,7 +451,19 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   }
 
   D_ASSERT(plan);
-  auto &insert = planner.Make<AdbcInsert>(op, op.table, op.column_index_map);
+
+  // Collect column names & types
+  vector<LogicalType> column_types;
+  vector<string> column_names;
+  auto &table = op.table;
+  auto &columns = table.GetColumns();
+  for (auto &col : columns.Logical()) {
+    column_types.push_back(col.GetType());
+    column_names.push_back(col.GetName());
+  }
+  auto table_name = table.name;
+  auto &insert = planner.Make<AdbcInsert>(
+      op, column_types, column_names, table_name, *this, InsertMode::APPEND);
   insert.children.push_back(*plan);
   return insert;
 }
