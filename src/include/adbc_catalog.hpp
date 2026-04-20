@@ -26,8 +26,8 @@ public:
              const string &table_name, Catalog &catalog, InsertMode mode);
 
 private:
-  vector<string> column_names;
   vector<LogicalType> column_types;
+  vector<string> column_names;
   string table_name;
   Catalog &catalog;
   InsertMode insert_mode;
