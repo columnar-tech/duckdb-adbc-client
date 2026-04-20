@@ -3,6 +3,7 @@
 #include "adbc_extension.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
+#include "adbc_execute.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_storage.hpp"
 #include "duckdb.hpp"
@@ -15,8 +16,7 @@ namespace duckdb {
 
 static void LoadInternal(ExtensionLoader &loader) {
 
-  // Construct a TableFunction which reads from ADBC given an input URI and SQL
-  // query
+  // Construct a read_adbc(uri, query) function to read from ADBC
   TableFunction read_adbc_function(
       "read_adbc",
       {LogicalType::VARCHAR, LogicalType::VARCHAR}, // Input URI, SQL query
@@ -36,6 +36,12 @@ static void LoadInternal(ExtensionLoader &loader) {
   // No support for filter pushdown
   read_adbc_function.filter_pushdown = false;
   loader.RegisterFunction(read_adbc_function);
+
+  // Construct an adbc_execute(uri, query) to perform DML via ADBC
+  TableFunction adbc_execute_function(
+      "adbc_execute", {LogicalType::VARCHAR, LogicalType::VARCHAR},
+      adbc::AdbcExecuteFunction, adbc::AdbcExecuteBindFunction);
+  loader.RegisterFunction(adbc_execute_function);
 
   // Storage extension for ATTACH
   auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());

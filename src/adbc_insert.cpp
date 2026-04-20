@@ -120,6 +120,9 @@ void AdbcInsert::CreateArrowStreamFromCollection(
     ClientContext &context, ColumnDataCollection &collection,
     const vector<LogicalType> &types, const vector<string> &names,
     ArrowArrayStream *stream) const {
+
+  // Populate the necessary state to stream the input from the buffered (SELECT
+  // ...)
   auto data = make_uniq<ArrowStreamCollectionData>();
   data->context = &context;
   data->types = types;
@@ -128,6 +131,7 @@ void AdbcInsert::CreateArrowStreamFromCollection(
   collection.InitializeScan(*data->scan_state);
   data->collection = &collection;
 
+  // Use DuckDB helpers to retrieve the ArrowSchema
   stream->get_schema = [](ArrowArrayStream *s, ArrowSchema *out) -> int {
     auto *d = static_cast<ArrowStreamCollectionData *>(s->private_data);
     if (!d->cached_schema) {
@@ -140,6 +144,7 @@ void AdbcInsert::CreateArrowStreamFromCollection(
     return 0;
   };
 
+  // Scan the next chunk for the buffered data and convert it to Arrow format
   stream->get_next = [](ArrowArrayStream *s, ArrowArray *out) -> int {
     auto *d = static_cast<ArrowStreamCollectionData *>(s->private_data);
     DataChunk chunk;
@@ -160,6 +165,7 @@ void AdbcInsert::CreateArrowStreamFromCollection(
     return nullptr;
   };
 
+  // Take ownership of the data and release it
   stream->release = [](ArrowArrayStream *s) {
     unique_ptr<ArrowStreamCollectionData> data(
         static_cast<ArrowStreamCollectionData *>(s->private_data));
