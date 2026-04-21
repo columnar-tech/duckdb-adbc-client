@@ -1,4 +1,5 @@
 #include <mutex>
+#include "duckdb/common/types.hpp"
 #include "adbc_execute.hpp"
 #include "adbc_scan.hpp"
 #include "adbc-vendor/adbc.hpp"
@@ -44,7 +45,7 @@ AdbcExecuteBindFunction(ClientContext &context, TableFunctionBindInput &input,
   }
 
   // Return type
-  return_types.emplace_back(LogicalType::BOOLEAN);
+  return_types.emplace_back(LogicalTypeId::BOOLEAN);
   names.emplace_back("Success");
 
   // Get the input parameters
