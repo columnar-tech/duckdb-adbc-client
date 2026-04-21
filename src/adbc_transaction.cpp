@@ -26,6 +26,7 @@ Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
   // Check to make sure auto-commit mode is on
   auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
   auto shared_connection = adbc_catalog.GetSharedConnection();
+  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   auto *connection = shared_connection->GetConnection();
 
   // We create a buffer for the option value returned via ADBC
@@ -66,7 +67,7 @@ void AdbcTransactionManager::RollbackTransaction(Transaction &transaction) {
   auto shared_connection = adbc_catalog.GetSharedConnection();
   auto *connection = shared_connection->GetConnection();
 
-  // Cancel any in-progress operations
+  // Cancel any in-progress operations (no locking required for Cancel)
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcConnectionCancel(connection, &error), IOException);
 

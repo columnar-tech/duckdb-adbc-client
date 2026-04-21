@@ -13,7 +13,7 @@ namespace adbc {
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
-  // Lock the connection and retrieve the catalog info from the Adbc
+  // Lock the connection and retrieve the catalog info from the ADBC
   // connection
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
