@@ -38,12 +38,6 @@ public:
                             ClientContext &context,
                             OperatorSinkFinalizeInput &input) const override;
 
-  void CreateArrowStreamFromCollection(ClientContext &context,
-                                       ColumnDataCollection &collection,
-                                       const vector<LogicalType> &types,
-                                       const vector<string> &names,
-                                       ArrowArrayStream *stream) const;
-
   bool IsSink() const override { return true; }
 
   bool ParallelSink() const override { return false; }
