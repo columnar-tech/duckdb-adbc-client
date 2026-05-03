@@ -2,6 +2,7 @@
 #include "adbc_catalog.hpp"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/storage/temporary_memory_manager.hpp"
 #include <mutex>
 #include <condition_variable>
 #include <iostream>
@@ -40,18 +41,46 @@ public:
                                  const vector<LogicalType> &types,
                                  const vector<string> &names,
                                  const string &table_name,
-                                 InsertMode insert_mode)
+                                 InsertMode insert_mode,
+                                 idx_t max_thread_memory)
       : context(context), catalog(catalog), insert_count(0), rows_affected(0),
         column_types(types), column_names(names), table_name(table_name),
-        insert_mode(insert_mode), collection(context, types) {}
+        insert_mode(insert_mode), collection(context, types),
+        temporary_memory_state(
+            TemporaryMemoryManager::Get(context).Register(context)) {
+    // Track the maximum amount of available memory we have
+    temporary_memory_state->SetRemainingSizeAndUpdateReservation(
+        context, max_thread_memory);
+  }
+
+  ~AdbcInsertGlobalState() {
+    {
+      // Acquire the lock to update flags
+      std::lock_guard<std::mutex> state_lock(mutex);
+      // Set the cancel flag
+      cancelled = true;
+      // Set the done flag
+      done = true;
+    }
+    // Notify both the consumering and producering threads
+    consumer_cv.notify_one();
+    producer_cv.notify_one();
+
+    // Wait for it to exit gracefully if possible
+    if (consumer_thread.joinable()) {
+      consumer_thread.join();
+    }
+  }
 
   // Insert thread
-  std::thread insert_thread;
+  std::thread consumer_thread;
 
   // Synchronization primitives
   std::mutex mutex;
-  std::condition_variable cv;
+  std::condition_variable consumer_cv;
+  std::condition_variable producer_cv;
   bool done = false;
+  bool cancelled = false;
   bool first_insert = true;
 
   // ADBC State
@@ -68,12 +97,14 @@ public:
   string table_name;
   InsertMode insert_mode;
   ColumnDataCollection collection;
+  unique_ptr<TemporaryMemoryState> temporary_memory_state;
 };
 
 unique_ptr<GlobalSinkState>
 AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
-  return make_uniq<AdbcInsertGlobalState>(
-      context, catalog, column_types, column_names, table_name, insert_mode);
+  return make_uniq<AdbcInsertGlobalState>(context, catalog, column_types,
+                                          column_names, table_name, insert_mode,
+                                          GetMaxThreadMemory(context));
 }
 
 struct ArrowStreamCollectionData {
@@ -93,12 +124,9 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
 
   // Use DuckDB helpers to retrieve the ArrowSchema
   stream->get_schema = [](ArrowArrayStream *s, ArrowSchema *out) -> int {
-    std::cout << "Worker: get_schema(...) called!" << std::endl;
     auto *data = static_cast<ArrowStreamCollectionData *>(s->private_data);
     auto &gstate = *data->gstate;
     if (!data->cached_schema) {
-      std::cout << "Worker: cached_schema not there, acquiring lock!"
-                << std::endl;
       // Acquire the lock to retrieve the schema
       std::lock_guard<std::mutex> state_lock(gstate.mutex);
       data->cached_schema = make_uniq<ArrowSchema>();
@@ -106,10 +134,7 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
       ArrowConverter::ToArrowSchema(data->cached_schema.get(),
                                     gstate.column_types, gstate.column_names,
                                     properties);
-    } else {
-      std::cout << "Worker: cached_schema is there!" << std::endl;
     }
-    std::cout << "Worker: No locks held now, copying schema" << std::endl;
     memcpy(out, data->cached_schema.get(), sizeof(ArrowSchema));
     return 0;
   };
@@ -119,38 +144,41 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
     auto *data = static_cast<ArrowStreamCollectionData *>(s->private_data);
     auto &gstate = *data->gstate;
 
-    std::cout << "Worker: get_next(...) called and creating unique_lock!"
-              << std::endl;
     // Acquire the lock
     std::unique_lock<std::mutex> state_lock(gstate.mutex);
-    std::cout << "Worker: Initializing chunk!" << std::endl;
     DataChunk chunk;
     chunk.Initialize(Allocator::DefaultAllocator(), gstate.column_types);
 
-    std::cout << "Worker: Calling cv.wait(...)" << std::endl;
+    std::cout << "Worker: Waiting for producer ..." << std::endl;
 
     // Wait until there's data to insert or the done flag is set
-    gstate.cv.wait(state_lock, [&gstate, &data, &chunk] {
+    gstate.consumer_cv.wait(state_lock, [&gstate, &data, &chunk] {
       return gstate.collection.Scan(*data->scan_state, chunk) || gstate.done;
     });
 
-    std::cout << "Worker: Returned from cv.wait(...)" << std::endl;
-    // No more data, ensure that the producer has set the done flag
-    if (chunk.size() == 0) {
-      std::cout << "Worker: No more data, exiting..." << std::endl;
-      D_ASSERT(gstate.done);
-      out->release = nullptr;
-      return 0;
-    } else {
-      std::cout << "Worker: Data available!" << std::endl;
+    // Check for cancelation
+    if (gstate.cancelled) {
+      std::cout << "Worker: Canceling ..." << std::endl;
+      return ECANCELED;
     }
 
-    std::cout << "Worker: Converting chunk to Arrow and returning" << std::endl;
+    // No more data, ensure that the producer has set the done flag
+    if (chunk.size() == 0) {
+      D_ASSERT(gstate.done);
+      out->release = nullptr;
+      std::cout << "Worker: Exiting Normally ..." << std::endl;
+      return 0;
+    }
+
+    std::cout << "Worker: Consumed chunk ..." << std::endl;
+
     // Otherwise scan the next chunk and return
     ArrowConverter::ToArrowArray(chunk, out,
                                  gstate.context.GetClientProperties(),
                                  ArrowTypeExtensionData::GetExtensionTypes(
                                      gstate.context, gstate.column_types));
+    // Notify the producer that this thread is ready to consume more data
+    gstate.producer_cv.notify_one();
     return 0;
   };
 
@@ -172,29 +200,19 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
 // TODO: Add static functions to ADBC insert
 static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 
-  std::cout << "Worker: AsyncInsert called!" << std::endl;
-
   // Get the ADBC connection
   auto &adbc_catalog = gstate.catalog.Cast<AdbcCatalog>();
   auto shared_connection = adbc_catalog.GetSharedConnection();
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   auto *connection = shared_connection->GetConnection();
 
-  std::cout << "Worker: Got connection and calling "
-               "CreateArrowStreamFromCollection(...)!"
-            << std::endl;
-
   // Wrap the buffered data as an ArrowArrayStream
   Handle<ArrowArrayStream> stream = {};
   CreateArrowStreamFromCollection(gstate, stream.get());
 
-  std::cout << "Worker: Creating ADBC statement!" << std::endl;
-
   // Create the ADBC statement to perform the insert
   Handle<Private::AdbcStatement> statement = {};
   CHECK_STATUS(AdbcStatementNew(connection, statement.get(), &error));
-
-  std::cout << "Worker: Setting insert mode!" << std::endl;
 
   // Set append mode only if we are doing an INSERT (not a CTAS)
   if (gstate.insert_mode == InsertMode::APPEND) {
@@ -203,27 +221,17 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
                                ADBC_INGEST_OPTION_MODE_APPEND, &error));
   }
 
-  std::cout << "Worker: Setting table name!" << std::endl;
-
   // Set the table name to perform the insert on
   CHECK_STATUS(AdbcStatementSetOption(statement.get(),
                                       ADBC_INGEST_OPTION_TARGET_TABLE,
                                       gstate.table_name.c_str(), &error));
 
-  std::cout << "Worker: Binding stream!" << std::endl;
-
   // Bind the stream to the statement
   CHECK_STATUS(AdbcStatementBindStream(statement.get(), stream.get(), &error));
-
-  std::cout << "Worker: Calling ExecuteQuery(...) on stream!" << std::endl;
 
   // Execute the insert
   CHECK_STATUS(AdbcStatementExecuteQuery(statement.get(), nullptr,
                                          &gstate.rows_affected, &error));
-
-  std::cout << "Worker: Returning from AsyncInsert normally!" << std::endl;
-
-  // AdbcStatementRelease(statement.get(), &error);
 };
 
 //===--------------------------------------------------------------------===//
@@ -233,38 +241,46 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
                                 OperatorSinkInput &input) const {
   auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
 
-  std::cout << "Sink(...) called and acquiring lock!" << std::endl;
   {
     // Acquire the lock and insert the chunk into the buffer
-    std::lock_guard<std::mutex> state_lock(gstate.mutex);
+    std::unique_lock<std::mutex> state_lock(gstate.mutex);
 
-    // If this is the first insert then spawn the insert thread
+    // If this is the first insert then spawn the consumer thread
     if (gstate.first_insert) {
-      std::cout << "first_insert was true!" << std::endl;
       gstate.first_insert = false;
-      std::cout << "Launching thread!" << std::endl;
-      gstate.insert_thread = std::thread(AsyncInsert, std::ref(gstate));
-    } else {
-      std::cout << "first_insert was false!" << std::endl;
+      std::cout << "Producer: Inserted chunk ..." << std::endl;
+      gstate.consumer_thread = std::thread(AsyncInsert, std::ref(gstate));
     }
+
+    std::cout << "Producer: " << gstate.collection.SizeInBytes() << " + "
+              << chunk.GetAllocationSize() << " < "
+              << gstate.temporary_memory_state->GetReservation() << "?"
+              << std::endl;
+
+    // If we are going to OOM
+    if (gstate.collection.SizeInBytes() + chunk.GetAllocationSize() >=
+        gstate.temporary_memory_state->GetReservation()) {
+      std::cout << "Going to OOM!" << std::endl;
+      // Wait for the consumer to consume all the chunks
+      gstate.producer_cv.wait(state_lock, [&gstate, &chunk] {
+        return gstate.collection.Count() > 0;
+      });
+      std::cout << "BROKE OUT!" << std::endl;
+    }
+
+    std::cout << "Producer: Space to insert! Doing it now!" << std::endl;
 
     // Now insert into the buffer
     gstate.collection.Append(chunk);
     gstate.insert_count += chunk.size();
 
-    std::cout << "Appending chunk to buffer!" << std::endl;
-    std::cout << "Insert count is now: " << gstate.insert_count << std::endl;
-
-    // Throw an exception if the insert thread hit an error
-    std::cout << "Checking error and throwing if there is one!" << std::endl;
+    // Throw an exception if the consumer thread hit an error
     auto &error = gstate.error;
     CHECK_ADBC(gstate.status, IOException);
   }
-  std::cout << "Sink(...) releasing lock and notifying thread of work!"
-            << std::endl;
 
-  // Notify the insert thread of new work
-  gstate.cv.notify_one();
+  // Notify the consumer thread of new work
+  gstate.consumer_cv.notify_one();
   return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -275,27 +291,23 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
                                       ClientContext &context,
                                       OperatorSinkFinalizeInput &input) const {
   auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
-  std::cout << "Finalize(...) called and acquiring lock!" << std::endl;
 
   // Signal that all data has been sent
   {
+    std::cout << "Producer: Setting done flag and signaling" << std::endl;
     std::lock_guard<std::mutex> state_lock(gstate.mutex);
-    std::cout << "Setting done flag!" << std::endl;
     gstate.done = true;
   }
-  std::cout << "Finalize(...) releasing lock and notifying thread of done flag!"
-            << std::endl;
 
-  // Notify the insert thread that all work is completed
-  gstate.cv.notify_one();
+  // Notify the consumer thread that all work is completed
+  gstate.consumer_cv.notify_one();
 
-  std::cout << "Calling join() on thread" << std::endl;
-  // Wait for the insert thread to complete
-  gstate.insert_thread.join();
-  std::cout << "join() completed" << std::endl;
+  // Wait for the consumer thread to complete
+  if (gstate.consumer_thread.joinable()) {
+    gstate.consumer_thread.join();
+  }
 
   // Check for ADBC errors
-  std::cout << "Checking error and throwing if there is one!" << std::endl;
   auto &error = gstate.error;
   CHECK_ADBC(gstate.status, IOException);
 
@@ -315,14 +327,12 @@ SourceResultType AdbcInsert::GetData(ExecutionContext &context,
                                      DataChunk &chunk,
                                      OperatorSourceInput &input) const {
   auto &gstate = sink_state->Cast<AdbcInsertGlobalState>();
-  std::cout << "GetData(...) called and acquiring lock!" << std::endl;
   {
     // Acquire the lock before fetching the insert count
     std::lock_guard<std::mutex> state_lock(gstate.mutex);
     chunk.SetCardinality(1);
     chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
   }
-  std::cout << "GetData(...) finished and released lock!" << std::endl;
   return SourceResultType::FINISHED;
 }
 
