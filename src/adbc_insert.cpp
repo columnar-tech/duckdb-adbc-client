@@ -58,7 +58,7 @@ public:
       // Acquire the lock to update flags
       std::lock_guard<std::mutex> state_lock(mutex);
       // Set the cancel flag
-      cancelled = true;
+      canceled = true;
       // Set the done flag
       done = true;
     }
@@ -80,7 +80,8 @@ public:
   std::condition_variable consumer_cv;
   std::condition_variable producer_cv;
   bool done = false;
-  bool cancelled = false;
+  bool canceled = false;
+  bool full = false;
   bool first_insert = true;
 
   // ADBC State
@@ -144,40 +145,49 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
     auto *data = static_cast<ArrowStreamCollectionData *>(s->private_data);
     auto &gstate = *data->gstate;
 
-    // Acquire the lock
-    std::unique_lock<std::mutex> state_lock(gstate.mutex);
-    DataChunk chunk;
-    chunk.Initialize(Allocator::DefaultAllocator(), gstate.column_types);
+    {
+      // Acquire the lock
+      std::unique_lock<std::mutex> state_lock(gstate.mutex);
 
-    std::cout << "Worker: Waiting for producer ..." << std::endl;
+      // Wait for the buffer to be full or done
+      std::cout << "Consumer: Waiting for full or done flag!" << std::endl;
+      gstate.consumer_cv.wait(state_lock,
+                              [&gstate] { return gstate.full || gstate.done; });
+      std::cout << "Consumer: Woke up for full or done flag!" << std::endl;
 
-    // Wait until there's data to insert or the done flag is set
-    gstate.consumer_cv.wait(state_lock, [&gstate, &data, &chunk] {
-      return gstate.collection.Scan(*data->scan_state, chunk) || gstate.done;
-    });
+      // Exit if the cancel flag was set
+      if (gstate.canceled) {
+        std::cout << "Consumer: Cancelled. Exiting ...!" << std::endl;
+        return ECANCELED;
+      }
 
-    // Check for cancelation
-    if (gstate.cancelled) {
-      std::cout << "Worker: Canceling ..." << std::endl;
-      return ECANCELED;
+      // Read the next chunk
+      std::cout << "Consumer: Reading chunk! " << std::endl;
+      DataChunk chunk;
+      chunk.Initialize(Allocator::DefaultAllocator(), gstate.column_types);
+      bool has_chunk = gstate.collection.Scan(*data->scan_state, chunk);
+      ArrowConverter::ToArrowArray(chunk, out,
+                                   gstate.context.GetClientProperties(),
+                                   ArrowTypeExtensionData::GetExtensionTypes(
+	      				   gstate.context, gstate.column_types));
+
+      // We read the last chunk
+      if (!has_chunk) {
+	 // Done flag is set so we exit
+	 if (gstate.done) {
+             std::cout << "Consumer: Done! Exiting ..." << std::endl;
+             out->release = nullptr;
+	 }
+
+	 // Full flag is set so we signal the producer to do more work
+         if (gstate.full) {
+	     std::cout << "Consumer: Full! All chunks exhausted! Signalling producer!" << std::endl;
+             gstate.full = false;
+             gstate.collection.Reset();
+             data->scan_state = make_uniq<ColumnDataScanState>();
+	 }
+      }
     }
-
-    // No more data, ensure that the producer has set the done flag
-    if (chunk.size() == 0) {
-      D_ASSERT(gstate.done);
-      out->release = nullptr;
-      std::cout << "Worker: Exiting Normally ..." << std::endl;
-      return 0;
-    }
-
-    std::cout << "Worker: Consumed chunk ..." << std::endl;
-
-    // Otherwise scan the next chunk and return
-    ArrowConverter::ToArrowArray(chunk, out,
-                                 gstate.context.GetClientProperties(),
-                                 ArrowTypeExtensionData::GetExtensionTypes(
-                                     gstate.context, gstate.column_types));
-    // Notify the producer that this thread is ready to consume more data
     gstate.producer_cv.notify_one();
     return 0;
   };
@@ -237,50 +247,54 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 //===--------------------------------------------------------------------===//
 // Sink
 //===--------------------------------------------------------------------===//
+
 SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
                                 OperatorSinkInput &input) const {
   auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
 
   {
-    // Acquire the lock and insert the chunk into the buffer
+    // Acquire the lock
     std::unique_lock<std::mutex> state_lock(gstate.mutex);
 
-    // If this is the first insert then spawn the consumer thread
+    // Exit if cancel flag is set
+    if (gstate.canceled) {
+      std::cout << "Producer: Canceled! Exiting gracefully ..." << std::endl;
+      return SinkResultType::FINISHED;
+    }
+
+    // Launch the insert thread on the first insert
     if (gstate.first_insert) {
       gstate.first_insert = false;
-      std::cout << "Producer: Inserted chunk ..." << std::endl;
       gstate.consumer_thread = std::thread(AsyncInsert, std::ref(gstate));
     }
 
-    std::cout << "Producer: " << gstate.collection.SizeInBytes() << " + "
-              << chunk.GetAllocationSize() << " < "
-              << gstate.temporary_memory_state->GetReservation() << "?"
+    // Handle any errors (TODO: Think about joining here)
+    auto &error = gstate.error;
+    CHECK_ADBC(gstate.status, IOException);
+
+    std::cout << "Producer: Waiting until buffer is less than 90% full ..."
               << std::endl;
 
-    // If we are going to OOM
-    if (gstate.collection.SizeInBytes() + chunk.GetAllocationSize() >=
-        gstate.temporary_memory_state->GetReservation()) {
-      std::cout << "Going to OOM!" << std::endl;
-      // Wait for the consumer to consume all the chunks
-      gstate.producer_cv.wait(state_lock, [&gstate, &chunk] {
-        return gstate.collection.Count() > 0;
-      });
-      std::cout << "BROKE OUT!" << std::endl;
-    }
+    // Wait until the buffer is not full or we are done 
+    gstate.producer_cv.wait(state_lock, [&gstate] {
+      return !gstate.full;
+    });
 
-    std::cout << "Producer: Space to insert! Doing it now!" << std::endl;
-
-    // Now insert into the buffer
+    std::cout << "Producer: Woke up as buffer is less than 90% full and inserting!"
+              << std::endl;
+    
+    // Insert the chunk
     gstate.collection.Append(chunk);
     gstate.insert_count += chunk.size();
 
-    // Throw an exception if the consumer thread hit an error
-    auto &error = gstate.error;
-    CHECK_ADBC(gstate.status, IOException);
+    // Set the full flag if we exceed 90% of the buffer
+    if (gstate.collection.SizeInBytes() >=
+             0.9 * gstate.temporary_memory_state->GetReservation()) {
+        gstate.full = true;
+    }
   }
-
-  // Notify the consumer thread of new work
   gstate.consumer_cv.notify_one();
+
   return SinkResultType::NEED_MORE_INPUT;
 }
 
@@ -294,7 +308,6 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
 
   // Signal that all data has been sent
   {
-    std::cout << "Producer: Setting done flag and signaling" << std::endl;
     std::lock_guard<std::mutex> state_lock(gstate.mutex);
     gstate.done = true;
   }
