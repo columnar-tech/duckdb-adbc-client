@@ -1,7 +1,6 @@
 #include "adbc_transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/attached_database.hpp"
-
 // Calculate the buffer size based on the actual constants
 #define MAX_OPTION_LEN                                                         \
   (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED)      \
