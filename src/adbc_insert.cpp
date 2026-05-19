@@ -171,24 +171,29 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
       // Read the next chunk
       DataChunk chunk;
       chunk.Initialize(Allocator::DefaultAllocator(), gstate.column_types);
-      bool has_chunks = gstate.collection.Scan(*data->scan_state, chunk);
+      bool read_chunk = gstate.collection.Scan(*data->scan_state, chunk);
 
-      // Convert it to arrow and decrease the chunk count
+      // Convert the DuckDB chunk to Arrow
       ArrowConverter::ToArrowArray(chunk, out,
                                    gstate.context.GetClientProperties(),
                                    ArrowTypeExtensionData::GetExtensionTypes(
                                        gstate.context, gstate.column_types));
-      if (has_chunks) {
-        gstate.active_chunks -= 1;
-      }
 
-      if (!has_chunks) {
-        // We are either done and exit
+      if (read_chunk) {
+        // Decrement the chunk count
+        gstate.active_chunks -= 1;
+      } else {
+        // If we are done then simply exit
         if (gstate.done) {
-          out->release = nullptr;
+          // Release the output ArrowArray
+          if (out && out->release) {
+            out->release(out);
+            out->release = nullptr;
+          }
         }
 
-        // Or the producer is blocked and we signal the producer for work
+        // If the producer is blocked then reset the buffer and signal for more
+        // work
         if (gstate.full) {
           gstate.full = false;
           gstate.collection.Reset();
