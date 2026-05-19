@@ -20,9 +20,18 @@ class AdbcCatalog : public Catalog {
 public:
   explicit AdbcCatalog(AttachedDatabase &db, const string &uri)
       : Catalog(db), uri(uri),
+        metadata_connection(make_shared_ptr<SharedAdbcConnection>()),
         shared_connection(make_shared_ptr<SharedAdbcConnection>()) {
+    // Initialize the metadata connection
+    InitializeDatabase(*metadata_connection, uri);
+    InitializeConnection(*metadata_connection);
+    // Initialize the regular connection
     InitializeDatabase(*shared_connection, uri);
     InitializeConnection(*shared_connection);
+  }
+
+  shared_ptr<SharedAdbcConnection> GetMetadataConnection() {
+    return metadata_connection;
   }
 
   shared_ptr<SharedAdbcConnection> GetSharedConnection() {
@@ -80,6 +89,7 @@ private:
 
 private:
   string uri;
+  shared_ptr<SharedAdbcConnection> metadata_connection;
   shared_ptr<SharedAdbcConnection> shared_connection;
   std::shared_mutex schemas_mutex;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;

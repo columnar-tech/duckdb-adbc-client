@@ -26,7 +26,7 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
   string sql = StringUtil::Format("SELECT * FROM \"%s\".\"%s\"", schema_name,
                                   table_name);
   auto factory = make_uniq<AdbcArrowStreamFactory>(
-      adbc_catalog.GetSharedConnection(), sql);
+      adbc_catalog.GetMetadataConnection(), sql);
   auto bind_data =
       make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
   auto col_names = bind_data->arrow_table.GetNames();

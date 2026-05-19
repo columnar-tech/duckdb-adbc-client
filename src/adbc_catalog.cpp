@@ -14,12 +14,12 @@ void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
   // Retrieve the catalog info from the ADBC connection
-  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
+  std::lock_guard<std::mutex> connection_lock(metadata_connection->GetMutex());
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
-  CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(), depth,
-                                      nullptr, schema_name, nullptr, nullptr,
-                                      nullptr, stream.get(), &error),
+  CHECK_ADBC(AdbcConnectionGetObjects(metadata_connection->GetConnection(),
+                                      depth, nullptr, schema_name, nullptr,
+                                      nullptr, nullptr, stream.get(), &error),
              IOException);
 
   while (true) {
