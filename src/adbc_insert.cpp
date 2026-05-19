@@ -42,11 +42,17 @@ public:
                                  const string &table_name,
                                  InsertMode insert_mode,
                                  idx_t max_thread_memory)
-      : context(context), catalog(catalog), insert_count(0), rows_affected(0),
-        column_types(types), column_names(names), table_name(table_name),
-        insert_mode(insert_mode), collection(context, types),
+      : context(context), catalog(catalog), column_types(types),
+        column_names(names), table_name(table_name), insert_mode(insert_mode),
+        collection(context, types),
         temporary_memory_state(
             TemporaryMemoryManager::Get(context).Register(context)) {
+
+    // Set the maximum number of chunks using the configuration setting
+    Value option_value;
+    context.TryGetCurrentSetting("adbc_insert_batch_size", option_value);
+    max_chunks = option_value.GetValue<int64_t>();
+
     // Track the maximum amount of available memory we have
     temporary_memory_state->SetRemainingSizeAndUpdateReservation(
         context, max_thread_memory);
@@ -61,11 +67,11 @@ public:
       // Set the done flag
       done = true;
     }
-    // Notify both the consumering and producering threads
+    // Notify both the consumer and producer threads
     consumer_cv.notify_one();
     producer_cv.notify_one();
 
-    // Wait for it to exit gracefully if possible
+    // Wait for the consumer thread to exit gracefully if possible
     if (consumer_thread.joinable()) {
       consumer_thread.join();
     }
@@ -83,6 +89,10 @@ public:
   bool full = false;
   bool first_insert = true;
 
+  // Batch size control
+  int64_t max_chunks;
+  int64_t active_chunks = 0;
+
   // ADBC State
   Private::AdbcError error = {};
   Private::AdbcStatusCode status = {};
@@ -90,8 +100,8 @@ public:
   // Insert state
   ClientContext &context;
   Catalog &catalog;
-  idx_t insert_count;
-  int64_t rows_affected;
+  idx_t insert_count = 0;
+  int64_t rows_affected = 0;
   vector<LogicalType> column_types;
   vector<string> column_names;
   string table_name;
@@ -155,25 +165,29 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
       // Read the next chunk
       DataChunk chunk;
       chunk.Initialize(Allocator::DefaultAllocator(), gstate.column_types);
-      bool has_chunk = gstate.collection.Scan(*data->scan_state, chunk);
+      bool has_chunks = gstate.collection.Scan(*data->scan_state, chunk);
+
+      // Convert it to arrow and decrease the chunk count
       ArrowConverter::ToArrowArray(chunk, out,
                                    gstate.context.GetClientProperties(),
                                    ArrowTypeExtensionData::GetExtensionTypes(
                                        gstate.context, gstate.column_types));
+      if (has_chunks) {
+        gstate.active_chunks -= 1;
+      }
 
-      // We just read the last chunk
-      if (!has_chunk) {
-
-        // Done flag is set so we exit
+      if (!has_chunks) {
+        // We are either done and exit
         if (gstate.done) {
           out->release = nullptr;
         }
 
-        // Full flag is set so we signal the producer to do more work
+        // Or the producer is blocked and we signal the producer for work
         if (gstate.full) {
           gstate.full = false;
           gstate.collection.Reset();
           data->scan_state = make_uniq<ColumnDataScanState>();
+          gstate.collection.InitializeScan(*data->scan_state);
         }
       }
     }
@@ -203,7 +217,6 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
   stream->private_data = data.release();
 }
 
-// TODO: Add static functions to ADBC insert
 static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 
   // Get the ADBC connection
@@ -270,10 +283,14 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
     // Insert the chunk
     gstate.collection.Append(chunk);
     gstate.insert_count += chunk.size();
+    gstate.active_chunks += 1;
 
-    // Set the full flag if we exceed 90% of the buffer
-    if (gstate.collection.SizeInBytes() >=
-        0.9 * gstate.temporary_memory_state->GetReservation()) {
+    // Block on 50% memory usage or hitting the max chunk size
+    auto used_bytes = gstate.collection.SizeInBytes();
+    auto free_bytes = gstate.temporary_memory_state->GetReservation();
+    bool exhausted_memory = used_bytes >= 0.5 * free_bytes;
+    bool hit_chunk_limit = gstate.active_chunks >= gstate.max_chunks;
+    if (exhausted_memory || hit_chunk_limit) {
       gstate.full = true;
     }
   }

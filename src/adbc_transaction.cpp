@@ -61,15 +61,6 @@ ErrorData AdbcTransactionManager::CommitTransaction(ClientContext &context,
 }
 
 void AdbcTransactionManager::RollbackTransaction(Transaction &transaction) {
-  // Get the active connection
-  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-  auto shared_connection = adbc_catalog.GetSharedConnection();
-  auto *connection = shared_connection->GetConnection();
-
-  // Cancel any in-progress operations (no locking required for Cancel)
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcConnectionCancel(connection, &error), IOException);
-
   // Remove the transaction we are rolling back and release the lock
   transactions.erase(transaction);
   transaction_lock.unlock();

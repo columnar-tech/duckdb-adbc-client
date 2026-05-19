@@ -145,7 +145,6 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input,
         local_state, function_data.arrow_table.GetColumns(),
         local_state.all_columns, function_data.lines_read - output_size, false);
     // Map the columns produced by the ADBC scan to the expected projection
-    // column
     output.ReferenceColumns(local_state.all_columns,
                             global_state.projection_ids);
   } else {

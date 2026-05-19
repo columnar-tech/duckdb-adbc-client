@@ -46,6 +46,20 @@ static void LoadInternal(ExtensionLoader &loader) {
   // Storage extension for ATTACH
   auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
   config.storage_extensions["adbc"] = make_uniq<adbc::AdbcStorageExtension>();
+
+  // Create a custom knob to control the buffer size for inserts
+  config.AddExtensionOption(
+      "adbc_insert_batch_size",
+      "The number of chunks (default 1000) to buffer in memory before "
+      "inserting via ADBC.",
+      LogicalType::BIGINT, Value::BIGINT(1000),
+      [](ClientContext &context, SetScope scope, Value &parameter) {
+        if (parameter.GetValue<int64_t>() <= 0) {
+          throw InvalidInputException(
+              "adbc_insert_batch_size must be greater than zero!");
+        }
+      },
+      SetScope::SESSION);
 }
 
 void AdbcExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }

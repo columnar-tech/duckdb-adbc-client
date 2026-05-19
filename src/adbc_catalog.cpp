@@ -1,11 +1,11 @@
-#include "adbc_insert.hpp"
 #include "adbc_catalog.hpp"
+#include "adbc_insert.hpp"
 #include "adbc_schema_entry.hpp"
 #include "adbc_table_entry.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
-#include "duckdb/storage/database_size.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/storage/database_size.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -13,8 +13,7 @@ namespace adbc {
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
-  // Lock the connection and retrieve the catalog info from the ADBC
-  // connection
+  // Retrieve the catalog info from the ADBC connection
   std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
@@ -167,8 +166,7 @@ SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
 void AdbcCatalog::ScanSchemas(
     ClientContext &context,
     std::function<void(SchemaCatalogEntry &)> callback) {
-  // For each schema, create an entry in the catalog (if it doesn't already
-  // exist) and execute the callback
+  // For each schema, create a catalog entry and execute the callback
   for (auto &schema_name : FetchSchemaNames()) {
     if (auto *entry = GetCatalogEntry(schema_name)) {
       callback(*entry);
@@ -224,7 +222,6 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalOperator &plan) {
 
   // ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
-  // statement
   auto &info = op.info;
   if (info->Base().on_conflict != OnCreateConflict::ERROR_ON_CONFLICT) {
     throw BinderException("CREATE TABLE commands not yet supported with IF NOT "
