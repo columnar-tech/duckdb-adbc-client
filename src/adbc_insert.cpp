@@ -265,8 +265,12 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
     // Acquire the lock
     std::unique_lock<std::mutex> state_lock(gstate.mutex);
 
+    // Immediately insert the first chunk for responsive error handling
+    bool first_chunk = false;
+
     // Launch the insert thread on the first insert
     if (gstate.first_insert) {
+      first_chunk = true;
       gstate.first_insert = false;
       gstate.consumer_thread = std::thread(AsyncInsert, std::ref(gstate));
     }
@@ -290,7 +294,7 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
     auto free_bytes = gstate.temporary_memory_state->GetReservation();
     bool exhausted_memory = used_bytes >= 0.5 * free_bytes;
     bool hit_chunk_limit = gstate.active_chunks >= gstate.max_chunks;
-    if (exhausted_memory || hit_chunk_limit) {
+    if (first_chunk || exhausted_memory || hit_chunk_limit) {
       gstate.full = true;
     }
   }
