@@ -75,6 +75,12 @@ public:
     if (consumer_thread.joinable()) {
       consumer_thread.join();
     }
+
+    // Release the error state
+    if (error.release) {
+      error.release(&error);
+      error.release = nullptr;
+    }
   }
 
   // Insert thread
