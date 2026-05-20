@@ -41,22 +41,5 @@ AdbcTableEntry::GetScanFunction(ClientContext &context,
   scan_adbc_function.filter_pushdown = false;
   return scan_adbc_function;
 }
-
-unique_ptr<BaseStatistics> AdbcTableEntry::GetStatistics(ClientContext &context,
-                                                         column_t column_id) {
-  return nullptr;
-}
-
-TableStorageInfo AdbcTableEntry::GetStorageInfo(ClientContext &context) {
-  return TableStorageInfo();
-}
-
-void AdbcTableEntry::BindUpdateConstraints(Binder &binder, LogicalGet &get,
-                                           LogicalProjection &proj,
-                                           LogicalUpdate &update,
-                                           ClientContext &context) {
-  throw NotImplementedException("UPDATE is not supported on ADBC tables");
-}
-
 } // namespace adbc
 } // namespace duckdb
