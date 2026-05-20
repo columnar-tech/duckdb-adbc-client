@@ -1,11 +1,6 @@
 #include "adbc_transaction.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/attached_database.hpp"
-// Calculate the buffer size based on the actual constants
-#define MAX_OPTION_LEN                                                         \
-  (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED)      \
-       ? sizeof(ADBC_OPTION_VALUE_ENABLED)                                     \
-       : sizeof(ADBC_OPTION_VALUE_DISABLED))
 
 namespace duckdb {
 namespace adbc {
@@ -19,33 +14,20 @@ AdbcTransactionManager::AdbcTransactionManager(AttachedDatabase &db,
     : TransactionManager(db), catalog(catalog) {}
 
 Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
-  // Create a new transaction
-  transaction_lock.lock();
 
-  // Check to make sure auto-commit mode is on
+  // Acquire a scoped lock just in case we throw an exception here
   auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-  auto shared_connection = adbc_catalog.GetSharedConnection();
-  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
-  auto *connection = shared_connection->GetConnection();
+  auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
-  // We create a buffer for the option value returned via ADBC
-  char option_value[MAX_OPTION_LEN] = {0};
-  size_t option_length = MAX_OPTION_LEN;
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcConnectionGetOption(connection,
-                                     ADBC_CONNECTION_OPTION_AUTOCOMMIT,
-                                     option_value, &option_length, &error),
-             IOException);
-
-  // Throw an exception if auto-commit is not turned on
-  if (strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) != 0) {
+  // Throw if auto-commit mode is not enabled
+  if (!adbc_catalog.AutocommitEnabled()) {
     throw NotImplementedException(
         "Running with the auto-commit option turned off is not yet supported "
         "with the ADBC extension");
   }
 
-  // Continue creating the transaction, serializing all transactions with a
-  // shared lock
+  // Create the transaction and hold the catalog lock for its duration
+  adbc_catalog.mutex.lock();
   auto transaction = make_uniq<AdbcTransaction>(*this, context);
   auto &result = *transaction;
   transactions[result] = std::move(transaction);
@@ -56,14 +38,16 @@ ErrorData AdbcTransactionManager::CommitTransaction(ClientContext &context,
                                                     Transaction &transaction) {
   // Remove the committed transaction and release the lock
   transactions.erase(transaction);
-  transaction_lock.unlock();
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  adbc_catalog.mutex.unlock();
   return ErrorData();
 }
 
 void AdbcTransactionManager::RollbackTransaction(Transaction &transaction) {
   // Remove the transaction we are rolling back and release the lock
   transactions.erase(transaction);
-  transaction_lock.unlock();
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  adbc_catalog.mutex.unlock();
 }
 
 void AdbcTransactionManager::Checkpoint(ClientContext &context, bool force) {

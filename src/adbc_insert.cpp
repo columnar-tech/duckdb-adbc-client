@@ -233,7 +233,6 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
   // Get the ADBC connection
   auto &adbc_catalog = gstate.catalog.Cast<AdbcCatalog>();
   auto shared_connection = adbc_catalog.GetSharedConnection();
-  std::lock_guard<std::mutex> connection_lock(shared_connection->GetMutex());
   auto *connection = shared_connection->GetConnection();
 
   // Wrap the buffered data as an ArrowArrayStream

@@ -1,4 +1,3 @@
-#include <mutex>
 #include "duckdb/common/types.hpp"
 #include "adbc_execute.hpp"
 #include "adbc_scan.hpp"
@@ -15,8 +14,6 @@ void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input,
 
   // Lock the connection
   auto &function_data = input.bind_data->CastNoConst<AdbcExecuteFunctionData>();
-  std::lock_guard<std::mutex> connection_lock(
-      function_data.connection->GetMutex());
 
   // Return if we already executed the DML
   if (function_data.finished) {

@@ -4,7 +4,6 @@
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "duckdb/transaction/transaction_manager.hpp"
-#include <mutex>
 
 namespace duckdb {
 namespace adbc {
@@ -28,7 +27,6 @@ public:
 
 private:
   Catalog &catalog;
-  mutex transaction_lock;
   reference_map_t<Transaction, unique_ptr<Transaction>> transactions;
 };
 

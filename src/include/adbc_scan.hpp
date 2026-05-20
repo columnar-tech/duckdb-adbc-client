@@ -29,8 +29,6 @@ public:
   AdbcArrowStreamFactory(const string &uri, const string &query_text);
   AdbcArrowStreamFactory(shared_ptr<SharedAdbcConnection> connection,
                          const string &query_text);
-
-  std::mutex &GetMutex();
   AdbcStatement *GetStatement();
 
 private:

@@ -5,21 +5,127 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/storage/database_size.hpp"
+
+// Calculate the buffer size based on the actual constants
+#define MAX_OPTION_LEN                                                         \
+  (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED)      \
+       ? sizeof(ADBC_OPTION_VALUE_ENABLED)                                     \
+       : sizeof(ADBC_OPTION_VALUE_DISABLED))
 
 namespace duckdb {
 namespace adbc {
 
+// Each of these public methods must acquire the catalog lock
+void AdbcCatalog::ScanSchemas(
+    ClientContext &context,
+    std::function<void(SchemaCatalogEntry &)> callback) {
+
+  auto catalog_lock = AcquireScopedLock();
+
+  // For each schema, create a catalog entry and execute the callback
+  for (auto &schema_name : FetchSchemaNames()) {
+    if (auto *entry = GetCatalogEntry(schema_name)) {
+      callback(*entry);
+    } else {
+      callback(*CreateCatalogEntry(schema_name));
+    }
+  }
+}
+
+optional_ptr<SchemaCatalogEntry>
+AdbcCatalog::LookupSchema(CatalogTransaction transaction,
+                          const EntryLookupInfo &schema_lookup,
+                          OnEntryNotFound if_not_found) {
+  auto catalog_lock = AcquireScopedLock();
+
+  // Return the entry if it already exists
+  const auto &name = schema_lookup.GetEntryName();
+  if (auto *entry = GetCatalogEntry(name)) {
+    return entry;
+  }
+
+  // Throw an exception if the schema doesn't exist
+  if (!SchemaExists(name)) {
+    throw IOException("Unable to find schema with name: \"%s\"", name);
+  }
+
+  // Otherwise add it to the catalog and return it
+  return CreateCatalogEntry(name);
+}
+
+PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
+                                                 PhysicalPlanGenerator &planner,
+                                                 LogicalCreateTable &op,
+                                                 PhysicalOperator &plan) {
+  auto catalog_lock = AcquireScopedLock();
+
+  // Ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
+  auto &info = op.info;
+  if (info->Base().on_conflict != OnCreateConflict::ERROR_ON_CONFLICT) {
+    throw BinderException("CREATE TABLE commands not yet supported with IF NOT "
+                          "EXISTS or REPLACE with the ADBC extension");
+  }
+
+  // Collect column names & types
+  vector<LogicalType> column_types;
+  vector<string> column_names;
+  for (auto &col : info->Base().columns.Logical()) {
+    column_types.push_back(col.GetType());
+    column_names.push_back(col.GetName());
+  }
+  auto table_name = info->Base().table;
+  auto &insert = planner.Make<AdbcInsert>(op, column_types, column_names,
+                                          table_name, *this, InsertMode::CTAS);
+  insert.children.push_back(plan);
+  return insert;
+}
+
+PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
+                                          PhysicalPlanGenerator &planner,
+                                          LogicalInsert &op,
+                                          optional_ptr<PhysicalOperator> plan) {
+  auto catalog_lock = AcquireScopedLock();
+
+  // Ensure no RETURNING clause or ON CONFLICT
+  if (op.return_chunk) {
+    throw BinderException(
+        "RETURNING clause not yet supported for INSERTs into an ADBC table");
+  }
+
+  if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
+    throw BinderException("ON CONFLICT clause not yet supported for "
+                          "INSERTs into ADBC table");
+  }
+
+  D_ASSERT(plan);
+
+  // Collect column names & types
+  vector<LogicalType> column_types;
+  vector<string> column_names;
+  auto &table = op.table;
+  auto &columns = table.GetColumns();
+  for (auto &col : columns.Logical()) {
+    column_types.push_back(col.GetType());
+    column_names.push_back(col.GetName());
+  }
+  auto table_name = table.name;
+  auto &insert = planner.Make<AdbcInsert>(
+      op, column_types, column_names, table_name, *this, InsertMode::APPEND);
+  insert.children.push_back(*plan);
+  return insert;
+}
+
+// Below are Private methods which assume that the catalog lock is already held
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
+
   // Retrieve the catalog info from the ADBC connection
-  std::lock_guard<std::mutex> connection_lock(metadata_connection->GetMutex());
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
-  CHECK_ADBC(AdbcConnectionGetObjects(metadata_connection->GetConnection(),
-                                      depth, nullptr, schema_name, nullptr,
-                                      nullptr, nullptr, stream.get(), &error),
+  CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(), depth,
+                                      nullptr, schema_name, nullptr, nullptr,
+                                      nullptr, stream.get(), &error),
              IOException);
 
   while (true) {
@@ -133,8 +239,7 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
 }
 
 SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
-  // acquire the read lock and lookup the catalog entry
-  std::shared_lock<std::shared_mutex> read_lock(schemas_mutex);
+  // Look up the entry
   auto it = owned_schemas.find(schema_name);
   if (it != owned_schemas.end()) {
     return it->second.get();
@@ -143,151 +248,31 @@ SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
 }
 
 SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
-  // acquire the write lock and insert the entry into the catalog
-  std::unique_lock<std::shared_mutex> write_lock(schemas_mutex);
-
-  // return the entry if it already exists
-  auto it = owned_schemas.find(schema_name);
-  if (it != owned_schemas.end()) {
-    return it->second.get();
+  // Return the entry if it already exists
+  if (auto *entry = GetCatalogEntry(schema_name)) {
+    return entry;
   }
 
-  // create an insert the entry
+  // Create and insert the entry
   CreateSchemaInfo info;
   info.schema = schema_name;
   auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
-
-  // otherwise insert the entry and return it
   auto ptr = schema_entry.get();
   owned_schemas[schema_name] = std::move(schema_entry);
   return ptr;
 }
 
-void AdbcCatalog::ScanSchemas(
-    ClientContext &context,
-    std::function<void(SchemaCatalogEntry &)> callback) {
-  // For each schema, create a catalog entry and execute the callback
-  for (auto &schema_name : FetchSchemaNames()) {
-    if (auto *entry = GetCatalogEntry(schema_name)) {
-      callback(*entry);
-    } else {
-      callback(*CreateCatalogEntry(schema_name));
-    }
-  }
-}
+bool AdbcCatalog::AutocommitEnabled() {
+  // We create a buffer for the option value returned via ADBC
+  char option_value[MAX_OPTION_LEN] = {0};
+  size_t option_length = MAX_OPTION_LEN;
+  Private::AdbcError error = {};
+  CHECK_ADBC(AdbcConnectionGetOption(shared_connection->GetConnection(),
+                                     ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+                                     option_value, &option_length, &error),
+             IOException);
 
-optional_ptr<SchemaCatalogEntry>
-AdbcCatalog::LookupSchema(CatalogTransaction transaction,
-                          const EntryLookupInfo &schema_lookup,
-                          OnEntryNotFound if_not_found) {
-  // Return the entry if it already exists
-  const auto &name = schema_lookup.GetEntryName();
-  if (auto *entry = GetCatalogEntry(name)) {
-    return entry;
-  }
-
-  // Throw an exception if the schema doesn't exist
-  if (!SchemaExists(name)) {
-    throw IOException("Unable to find schema with name: \"%s\"", name);
-  }
-
-  // Otherwise add it to the catalog and return it
-  return CreateCatalogEntry(name);
-}
-
-optional_ptr<CatalogEntry>
-AdbcCatalog::CreateSchema(CatalogTransaction transaction,
-                          CreateSchemaInfo &info) {
-  throw NotImplementedException(
-      "CREATE SCHEMA not yet supported with the ADBC extension");
-}
-
-void AdbcCatalog::DropSchema(ClientContext &context, DropInfo &info) {
-  throw NotImplementedException(
-      "DROP SCHEMA not yet supported with the ADBC extension");
-}
-
-DatabaseSize AdbcCatalog::GetDatabaseSize(ClientContext &context) {
-  throw NotImplementedException("Getting the database size is not yet "
-                                "supported with the ADBC extension");
-}
-
-bool AdbcCatalog::InMemory() { return false; }
-
-string AdbcCatalog::GetDBPath() { return uri; }
-
-PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
-                                                 PhysicalPlanGenerator &planner,
-                                                 LogicalCreateTable &op,
-                                                 PhysicalOperator &plan) {
-
-  // ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
-  auto &info = op.info;
-  if (info->Base().on_conflict != OnCreateConflict::ERROR_ON_CONFLICT) {
-    throw BinderException("CREATE TABLE commands not yet supported with IF NOT "
-                          "EXISTS or REPLACE with the ADBC extension");
-  }
-
-  // collect column names & types
-  vector<LogicalType> column_types;
-  vector<string> column_names;
-  for (auto &col : info->Base().columns.Logical()) {
-    column_types.push_back(col.GetType());
-    column_names.push_back(col.GetName());
-  }
-  auto table_name = info->Base().table;
-  auto &insert = planner.Make<AdbcInsert>(op, column_types, column_names,
-                                          table_name, *this, InsertMode::CTAS);
-  insert.children.push_back(plan);
-  return insert;
-}
-
-PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
-                                          PhysicalPlanGenerator &planner,
-                                          LogicalInsert &op,
-                                          optional_ptr<PhysicalOperator> plan) {
-  if (op.return_chunk) {
-    throw BinderException(
-        "RETURNING clause not yet supported for INSERTs into an ADBC table");
-  }
-
-  if (op.on_conflict_info.action_type != OnConflictAction::THROW) {
-    throw BinderException("ON CONFLICT clause not yet supported for "
-                          "INSERTs into ADBC table");
-  }
-
-  D_ASSERT(plan);
-
-  // Collect column names & types
-  vector<LogicalType> column_types;
-  vector<string> column_names;
-  auto &table = op.table;
-  auto &columns = table.GetColumns();
-  for (auto &col : columns.Logical()) {
-    column_types.push_back(col.GetType());
-    column_names.push_back(col.GetName());
-  }
-  auto table_name = table.name;
-  auto &insert = planner.Make<AdbcInsert>(
-      op, column_types, column_names, table_name, *this, InsertMode::APPEND);
-  insert.children.push_back(*plan);
-  return insert;
-}
-
-PhysicalOperator &AdbcCatalog::PlanDelete(ClientContext &context,
-                                          PhysicalPlanGenerator &planner,
-                                          LogicalDelete &op,
-                                          PhysicalOperator &plan) {
-  throw NotImplementedException(
-      "DELETE not yet supported with the ADBC extension");
-}
-
-PhysicalOperator &AdbcCatalog::PlanUpdate(ClientContext &context,
-                                          PhysicalPlanGenerator &planner,
-                                          LogicalUpdate &op,
-                                          PhysicalOperator &plan) {
-  throw NotImplementedException(
-      "UPDATE not yet supported with the ADBC extension");
+  return strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0;
 }
 
 } // namespace adbc

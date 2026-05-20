@@ -1,4 +1,3 @@
-#include <mutex>
 #include "adbc_scan.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
@@ -12,7 +11,6 @@ using namespace Private;
 void InitializeDatabase(SharedAdbcConnection &shared_connection,
                         const string &uri) {
   // Initialize the database
-  std::lock_guard<std::mutex> connection_lock(shared_connection.GetMutex());
   auto *database = shared_connection.GetDatabase();
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcDatabaseNew(database, &error), BinderException);
@@ -26,7 +24,6 @@ void InitializeDatabase(SharedAdbcConnection &shared_connection,
 
 void InitializeConnection(SharedAdbcConnection &shared_connection) {
   // Initialize the connection
-  std::lock_guard<std::mutex> connection_lock(shared_connection.GetMutex());
   auto *connection = shared_connection.GetConnection();
   auto *database = shared_connection.GetDatabase();
   Private::AdbcError error = {};
@@ -38,7 +35,6 @@ void InitializeStatement(SharedAdbcConnection &shared_connection,
                          Private::AdbcStatement *statement,
                          const string &query_text) {
   // Initialize the statement
-  std::lock_guard<std::mutex> connection_lock(shared_connection.GetMutex());
   auto *connection = shared_connection.GetConnection();
   Private::AdbcError error = {};
   CHECK_ADBC(AdbcStatementNew(connection, statement, &error), BinderException);
@@ -60,9 +56,6 @@ AdbcArrowStreamFactory::AdbcArrowStreamFactory(
   InitializeStatement(*shared_connection, statement.get(), query_text);
 }
 
-std::mutex &AdbcArrowStreamFactory::GetMutex() {
-  return shared_connection->GetMutex();
-}
 AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
   return statement.get();
 }
@@ -73,7 +66,6 @@ AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
   auto factory = reinterpret_cast<AdbcArrowStreamFactory *>(factory_ptr);
 
   // Create the stream for the query result
-  std::lock_guard<std::mutex> connection_lock(factory->GetMutex());
   AdbcError error = {};
   ArrowArrayStream adbc_stream = {};
   int64_t rows_affected;
@@ -96,8 +88,6 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(
       adbc_arrow_stream_factory(std::move(factory)) {
 
   // Retrieve and register the schema information from ADBC with DuckDB
-  std::lock_guard<std::mutex> connection_lock(
-      adbc_arrow_stream_factory->GetMutex());
   AdbcError error = {};
   auto *statement = adbc_arrow_stream_factory->GetStatement();
   auto *schema = reinterpret_cast<ArrowSchema *>(&schema_root.arrow_schema);

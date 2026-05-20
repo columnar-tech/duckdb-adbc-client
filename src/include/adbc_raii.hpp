@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstring>
-#include <mutex>
 #include <memory>
 #include <string>
 #include "adbc-vendor/adbc.hpp"
@@ -111,11 +110,9 @@ template <typename Resource> struct Handle {
 };
 
 struct SharedAdbcConnection {
-  std::mutex &GetMutex() { return connection_mutex; }
   Private::AdbcConnection *GetConnection() { return connection.get(); }
   Private::AdbcDatabase *GetDatabase() { return database.get(); }
 
-  std::mutex connection_mutex;
   Handle<Private::AdbcDatabase> database = {};
   Handle<Private::AdbcConnection> connection = {};
 };

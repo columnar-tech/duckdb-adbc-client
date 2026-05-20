@@ -3,19 +3,17 @@
 #include "adbc_scan.hpp"
 #include "adbc_table_entry.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/common/exception/catalog_exception.hpp"
 
 namespace duckdb {
 namespace adbc {
 
 CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
                                                      const string &table_name) {
-  // Acquire the read lock and check if the entry already exists
-  {
-    std::shared_lock<std::shared_mutex> read_lock(tables_mutex);
-    auto it = owned_tables.find(table_name);
-    if (it != owned_tables.end()) {
-      return it->second.get();
-    }
+  // Return the entry if it already exists
+  auto it = owned_tables.find(table_name);
+  if (it != owned_tables.end()) {
+    return it->second.get();
   }
 
   // Create the entry to be inserted
@@ -26,7 +24,7 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
   string sql = StringUtil::Format("SELECT * FROM \"%s\".\"%s\"", schema_name,
                                   table_name);
   auto factory = make_uniq<AdbcArrowStreamFactory>(
-      adbc_catalog.GetMetadataConnection(), sql);
+      adbc_catalog.GetSharedConnection(), sql);
   auto bind_data =
       make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
   auto col_names = bind_data->arrow_table.GetNames();
@@ -37,18 +35,9 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
     table_info->columns.AddColumn(std::move(col));
   }
   table_info->internal = false;
+
+  // Insert the entry
   auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
-
-  // Now acquire the write lock and try to insert the entry
-  std::unique_lock<std::shared_mutex> write_lock(tables_mutex);
-
-  // Return it if it already exists
-  auto it = owned_tables.find(table_name);
-  if (it != owned_tables.end()) {
-    return it->second.get();
-  }
-
-  // Otherwise insert it
   auto ptr = table_entry.get();
   owned_tables[table_name] = std::move(table_entry);
   return ptr;
@@ -57,6 +46,9 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
 optional_ptr<CatalogEntry>
 AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
                              const EntryLookupInfo &lookup_info) {
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  auto catalog_lock = adbc_catalog.AcquireScopedLock();
+
   try {
     return GetOrCreateTableEntry(transaction.GetContext(),
                                  lookup_info.GetEntryName());
@@ -69,19 +61,40 @@ void AdbcSchemaEntry::Scan(
     ClientContext &context, CatalogType type,
     const std::function<void(CatalogEntry &)> &callback) {
 
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  auto catalog_lock = adbc_catalog.AcquireScopedLock();
+
   // We only support table lookups
   if (type != CatalogType::TABLE_ENTRY) {
     return;
   }
 
-  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
   auto schema_name = this->name;
-  auto uri = adbc_catalog.GetUri();
+  auto uri = adbc_catalog.uri;
 
   // For each ADBC table in the schema, get or create an entry for it
   for (const auto &table_name : adbc_catalog.FetchTableNames(schema_name)) {
     callback(*GetOrCreateTableEntry(context, table_name));
   }
+}
+
+optional_ptr<CatalogEntry>
+AdbcSchemaEntry::CreateTable(CatalogTransaction transaction,
+                             BoundCreateTableInfo &info) {
+
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  auto catalog_lock = adbc_catalog.AcquireScopedLock();
+
+  // Throw an exception if the entry already exists
+  auto table_name = info.Base().table;
+  auto it = owned_tables.find(table_name);
+  if (it != owned_tables.end()) {
+    throw CatalogException::EntryAlreadyExists(CatalogType::TABLE_ENTRY,
+                                               table_name);
+  }
+
+  throw NotImplementedException(
+      "CreateTable not yet supported with the ADBC extension");
 }
 
 } // namespace adbc

@@ -1,10 +1,8 @@
 #pragma once
 
-#include <shared_mutex>
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
-#include "duckdb/common/exception/catalog_exception.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -43,20 +41,7 @@ public:
   }
 
   optional_ptr<CatalogEntry> CreateTable(CatalogTransaction transaction,
-                                         BoundCreateTableInfo &info) override {
-
-    // Acquire the read lock and throw an exception if the table already exists
-    auto table_name = info.Base().table;
-    std::shared_lock<std::shared_mutex> read_lock(tables_mutex);
-    auto it = owned_tables.find(table_name);
-    if (it != owned_tables.end()) {
-      throw CatalogException::EntryAlreadyExists(CatalogType::TABLE_ENTRY,
-                                                 table_name);
-    }
-
-    throw NotImplementedException(
-        "CreateTable not yet supported with the ADBC extension");
-  }
+                                         BoundCreateTableInfo &info) override;
 
   optional_ptr<CatalogEntry> CreateView(CatalogTransaction transaction,
                                         CreateViewInfo &info) override {
@@ -115,7 +100,6 @@ public:
   }
 
 private:
-  std::shared_mutex tables_mutex;
   case_insensitive_map_t<unique_ptr<CatalogEntry>> owned_tables;
 };
 

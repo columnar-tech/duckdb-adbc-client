@@ -13,13 +13,14 @@ AdbcTableEntry::AdbcTableEntry(Catalog &catalog, SchemaCatalogEntry &schema,
 TableFunction
 AdbcTableEntry::GetScanFunction(ClientContext &context,
                                 unique_ptr<FunctionData> &bind_data) {
+  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
   // construct an ADBC scan function using a new connection object for the scan
-  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
   auto qualified_name = StringUtil::Format("\"%s\".\"%s\"", schema.name, name);
   auto sql = "SELECT * FROM " + qualified_name;
   auto adbc_arrow_stream_factory =
-      make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetUri(), sql);
+      make_uniq<AdbcArrowStreamFactory>(adbc_catalog.uri, sql);
   auto arrow_function_data = make_uniq<AdbcArrowScanFunctionData>(
       context, std::move(adbc_arrow_stream_factory));
   arrow_function_data->all_types = arrow_function_data->arrow_table.GetTypes();

@@ -9,45 +9,34 @@
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
+#include "duckdb/storage/database_size.hpp"
 #include <functional>
 #include <mutex>
-#include <shared_mutex>
 
 namespace duckdb {
 namespace adbc {
 
 class AdbcCatalog : public Catalog {
 public:
+  friend class AdbcSchemaEntry;
+  friend class AdbcTableEntry;
+  friend class AdbcTransactionManager;
+
   explicit AdbcCatalog(AttachedDatabase &db, const string &uri)
       : Catalog(db), uri(uri),
-        metadata_connection(make_shared_ptr<SharedAdbcConnection>()),
         shared_connection(make_shared_ptr<SharedAdbcConnection>()) {
-    // Initialize the metadata connection
-    InitializeDatabase(*metadata_connection, uri);
-    InitializeConnection(*metadata_connection);
     // Initialize the regular connection
     InitializeDatabase(*shared_connection, uri);
     InitializeConnection(*shared_connection);
   }
 
-  shared_ptr<SharedAdbcConnection> GetMetadataConnection() {
-    return metadata_connection;
-  }
-
   shared_ptr<SharedAdbcConnection> GetSharedConnection() {
     return shared_connection;
   }
-  bool SchemaExists(const string &schema_name);
-  vector<string> FetchSchemaNames();
-  vector<string> FetchTableNames(const string &schema_name);
-
-  const string &GetUri() const { return uri; }
 
   void Initialize(bool load_builtin) override {}
   string GetCatalogType() override { return "adbc"; }
 
-  SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
-  SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
   void ScanSchemas(ClientContext &context,
                    std::function<void(SchemaCatalogEntry &)> callback) override;
   optional_ptr<SchemaCatalogEntry>
@@ -61,11 +50,21 @@ public:
     return CatalogLookupBehavior::NEVER_LOOKUP;
   }
   optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction,
-                                          CreateSchemaInfo &info) override;
-  void DropSchema(ClientContext &context, DropInfo &info) override;
-  DatabaseSize GetDatabaseSize(ClientContext &context) override;
-  bool InMemory() override;
-  string GetDBPath() override;
+                                          CreateSchemaInfo &info) override {
+    throw NotImplementedException(
+        "CREATE SCHEMA not yet supported with the ADBC extension");
+  }
+  void DropSchema(ClientContext &context, DropInfo &info) override {
+    throw NotImplementedException(
+        "DROP SCHEMA not yet supported with the ADBC extension");
+  }
+  DatabaseSize GetDatabaseSize(ClientContext &context) override {
+    throw NotImplementedException("Getting the database size is not yet "
+                                  "supported with the ADBC extension");
+    return DatabaseSize();
+  }
+  bool InMemory() override { return false; }
+  string GetDBPath() override { return uri; }
   PhysicalOperator &PlanCreateTableAs(ClientContext &context,
                                       PhysicalPlanGenerator &planner,
                                       LogicalCreateTable &op,
@@ -77,21 +76,36 @@ public:
   PhysicalOperator &PlanDelete(ClientContext &context,
                                PhysicalPlanGenerator &planner,
                                LogicalDelete &op,
-                               PhysicalOperator &plan) override;
+                               PhysicalOperator &plan) override {
+    throw NotImplementedException(
+        "DELETE not yet supported with the ADBC extension");
+  }
+
   PhysicalOperator &PlanUpdate(ClientContext &context,
                                PhysicalPlanGenerator &planner,
                                LogicalUpdate &op,
-                               PhysicalOperator &plan) override;
+                               PhysicalOperator &plan) override {
+    throw NotImplementedException(
+        "UPDATE not yet supported with the ADBC extension");
+  }
 
 private:
+  std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
+    return std::unique_lock(mutex);
+  }
   void ForEachCatalog(const char *schema_name, int depth,
                       const std::function<bool(ArrowArray *)> &callback);
+  bool SchemaExists(const string &schema_name);
+  vector<string> FetchSchemaNames();
+  vector<string> FetchTableNames(const string &schema_name);
+  SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
+  SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
+  bool AutocommitEnabled();
 
 private:
   string uri;
-  shared_ptr<SharedAdbcConnection> metadata_connection;
   shared_ptr<SharedAdbcConnection> shared_connection;
-  std::shared_mutex schemas_mutex;
+  std::recursive_mutex mutex;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };
 
