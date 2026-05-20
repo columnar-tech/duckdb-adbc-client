@@ -93,6 +93,8 @@ private:
   std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
     return std::unique_lock(mutex);
   }
+
+  // These methods assume that the catalog lock is held
   void ForEachCatalog(const char *schema_name, int depth,
                       const std::function<bool(ArrowArray *)> &callback);
   bool SchemaExists(const string &schema_name);

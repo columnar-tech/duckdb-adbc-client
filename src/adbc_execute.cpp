@@ -11,16 +11,14 @@ using namespace Private;
 
 void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input,
                          DataChunk &output) {
-
-  // Lock the connection
+  
+  // Return if we already executed the command
   auto &function_data = input.bind_data->CastNoConst<AdbcExecuteFunctionData>();
-
-  // Return if we already executed the DML
   if (function_data.finished) {
     return;
   }
 
-  // Execute the DML
+  // Execute the command
   AdbcError error = {};
   CHECK_ADBC(AdbcStatementExecuteQuery(function_data.statement.get(), nullptr,
                                        nullptr, &error),

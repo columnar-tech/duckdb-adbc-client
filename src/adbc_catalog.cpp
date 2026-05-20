@@ -115,7 +115,7 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   return insert;
 }
 
-// Below are Private methods which assume that the catalog lock is already held
+// Below are private methods which assume that the catalog lock is already held
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
