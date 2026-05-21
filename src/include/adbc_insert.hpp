@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/execution/physical_operator.hpp"
-#include "duckdb/catalog/catalog.hpp"
+// #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 
 namespace duckdb {
@@ -9,17 +9,19 @@ namespace adbc {
 
 enum class InsertMode { APPEND, CTAS };
 
+class AdbcCatalog;
+
 class AdbcInsert : public PhysicalOperator {
 public:
   AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
              const vector<LogicalType> &types, const vector<string> &names,
-             const string &table_name, Catalog &catalog, InsertMode mode);
+             const string &table_name, AdbcCatalog &catalog, InsertMode mode);
 
 private:
   vector<LogicalType> column_types;
   vector<string> column_names;
   string table_name;
-  Catalog &catalog;
+  AdbcCatalog &catalog;
   InsertMode insert_mode;
 
 public:

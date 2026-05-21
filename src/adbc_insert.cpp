@@ -25,7 +25,7 @@ namespace adbc {
 AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
                        const vector<LogicalType> &types,
                        const vector<string> &names, const string &table_name,
-                       Catalog &catalog, InsertMode mode)
+                       AdbcCatalog &catalog, InsertMode mode)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types,
                        1),
       column_types(types), column_names(names), table_name(table_name),
@@ -36,7 +36,7 @@ AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
 //===--------------------------------------------------------------------===//
 class AdbcInsertGlobalState : public GlobalSinkState {
 public:
-  explicit AdbcInsertGlobalState(ClientContext &context, Catalog &catalog,
+  explicit AdbcInsertGlobalState(ClientContext &context, AdbcCatalog &catalog,
                                  const vector<LogicalType> &types,
                                  const vector<string> &names,
                                  const string &table_name,
@@ -105,7 +105,7 @@ public:
 
   // Insert state
   ClientContext &context;
-  Catalog &catalog;
+  AdbcCatalog &catalog;
   idx_t insert_count = 0;
   int64_t rows_affected = 0;
   vector<LogicalType> column_types;
@@ -231,9 +231,8 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
 static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 
   // Get the ADBC connection
-  auto &adbc_catalog = gstate.catalog.Cast<AdbcCatalog>();
-  auto shared_connection = adbc_catalog.GetSharedConnection();
-  auto *connection = shared_connection->GetConnection();
+  auto pooled_connection = gstate.catalog.GetPooledConnection();
+  auto *connection = pooled_connection->GetRawConnection();
 
   // Wrap the buffered data as an ArrowArrayStream
   Handle<ArrowArrayStream> stream = {};

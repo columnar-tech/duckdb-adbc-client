@@ -11,7 +11,7 @@ using namespace Private;
 
 void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input,
                          DataChunk &output) {
-  
+
   // Return if we already executed the command
   auto &function_data = input.bind_data->CastNoConst<AdbcExecuteFunctionData>();
   if (function_data.finished) {

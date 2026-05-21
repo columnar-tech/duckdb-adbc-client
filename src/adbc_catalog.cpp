@@ -6,20 +6,14 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 
-// Calculate the buffer size based on the actual constants
-#define MAX_OPTION_LEN                                                         \
-  (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED)      \
-       ? sizeof(ADBC_OPTION_VALUE_ENABLED)                                     \
-       : sizeof(ADBC_OPTION_VALUE_DISABLED))
-
 namespace duckdb {
 namespace adbc {
 
-// Each of these public methods must acquire the catalog lock
 void AdbcCatalog::ScanSchemas(
     ClientContext &context,
     std::function<void(SchemaCatalogEntry &)> callback) {
 
+  // Lock the catalog
   auto catalog_lock = AcquireScopedLock();
 
   // For each schema, create a catalog entry and execute the callback
@@ -36,6 +30,8 @@ optional_ptr<SchemaCatalogEntry>
 AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                           const EntryLookupInfo &schema_lookup,
                           OnEntryNotFound if_not_found) {
+
+  // Lock the catalog
   auto catalog_lock = AcquireScopedLock();
 
   // Return the entry if it already exists
@@ -57,6 +53,8 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
                                                  PhysicalOperator &plan) {
+
+  // Lock the catalog
   auto catalog_lock = AcquireScopedLock();
 
   // Ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
@@ -84,6 +82,8 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
                                           PhysicalPlanGenerator &planner,
                                           LogicalInsert &op,
                                           optional_ptr<PhysicalOperator> plan) {
+
+  // Lock the catalog
   auto catalog_lock = AcquireScopedLock();
 
   // Ensure no RETURNING clause or ON CONFLICT
@@ -115,7 +115,6 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   return insert;
 }
 
-// Below are private methods which assume that the catalog lock is already held
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
@@ -123,9 +122,9 @@ void AdbcCatalog::ForEachCatalog(
   // Retrieve the catalog info from the ADBC connection
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
-  CHECK_ADBC(AdbcConnectionGetObjects(shared_connection->GetConnection(), depth,
-                                      nullptr, schema_name, nullptr, nullptr,
-                                      nullptr, stream.get(), &error),
+  CHECK_ADBC(AdbcConnectionGetObjects(pool.GetConnection()->GetRawConnection(),
+                                      depth, nullptr, schema_name, nullptr,
+                                      nullptr, nullptr, stream.get(), &error),
              IOException);
 
   while (true) {
@@ -261,19 +260,5 @@ SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
   owned_schemas[schema_name] = std::move(schema_entry);
   return ptr;
 }
-
-bool AdbcCatalog::AutocommitEnabled() {
-  // We create a buffer for the option value returned via ADBC
-  char option_value[MAX_OPTION_LEN] = {0};
-  size_t option_length = MAX_OPTION_LEN;
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcConnectionGetOption(shared_connection->GetConnection(),
-                                     ADBC_CONNECTION_OPTION_AUTOCOMMIT,
-                                     option_value, &option_length, &error),
-             IOException);
-
-  return strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0;
-}
-
 } // namespace adbc
 } // namespace duckdb

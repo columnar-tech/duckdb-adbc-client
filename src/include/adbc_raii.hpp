@@ -6,6 +6,7 @@
 #include <string>
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
+#include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -109,12 +110,56 @@ template <typename Resource> struct Handle {
   Resource *get() { return &value; }
 };
 
-struct SharedAdbcConnection {
+class AdbcConnection {
+public:
+  AdbcConnection(const string &uri) : database(), connection() {
+    // Initialize the database
+    Private::AdbcError error = {};
+    CHECK_ADBC(AdbcDatabaseNew(database.get(), &error), BinderException);
+    CHECK_ADBC(
+        AdbcDatabaseSetOption(database.get(), "uri", uri.c_str(), &error),
+        BinderException);
+    CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(
+                   database.get(), ADBC_LOAD_FLAG_DEFAULT, &error),
+               BinderException);
+    CHECK_ADBC(AdbcDatabaseInit(database.get(), &error), BinderException);
+
+    // Initialize the connection
+    CHECK_ADBC(AdbcConnectionNew(connection.get(), &error), BinderException);
+    CHECK_ADBC(AdbcConnectionInit(connection.get(), database.get(), &error),
+               BinderException);
+  }
+  // Disable copy constructors
+  AdbcConnection(const AdbcConnection &other) = delete;
+  AdbcConnection &operator=(const AdbcConnection &) = delete;
+
+  // Enable move constructors
+  AdbcConnection(AdbcConnection &&other) noexcept {
+    std::swap(connection, other.connection);
+    std::swap(database, other.database);
+  }
+  AdbcConnection &operator=(AdbcConnection &&other) noexcept {
+    std::swap(connection, other.connection);
+    std::swap(database, other.database);
+    return *this;
+  }
+
   Private::AdbcConnection *GetConnection() { return connection.get(); }
   Private::AdbcDatabase *GetDatabase() { return database.get(); }
 
-  Handle<Private::AdbcDatabase> database = {};
-  Handle<Private::AdbcConnection> connection = {};
+  void InitializeStatement(Private::AdbcStatement *statement,
+                           const string &query_text) {
+    // Initialize the statement
+    Private::AdbcError error = {};
+    CHECK_ADBC(AdbcStatementNew(connection.get(), statement, &error),
+               BinderException);
+    CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), &error),
+               BinderException);
+  }
+
+private:
+  Handle<Private::AdbcDatabase> database;
+  Handle<Private::AdbcConnection> connection;
 };
 
 } // namespace adbc

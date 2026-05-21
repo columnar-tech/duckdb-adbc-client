@@ -1,59 +1,24 @@
 #include "adbc_scan.hpp"
+#include "adbc_catalog.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
-
+#include <iostream>
 namespace duckdb {
 namespace adbc {
 
 using namespace Private;
 
-void InitializeDatabase(SharedAdbcConnection &shared_connection,
-                        const string &uri) {
-  // Initialize the database
-  auto *database = shared_connection.GetDatabase();
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcDatabaseNew(database, &error), BinderException);
-  CHECK_ADBC(AdbcDatabaseSetOption(database, "uri", uri.c_str(), &error),
-             BinderException);
-  CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(
-                 database, ADBC_LOAD_FLAG_DEFAULT, &error),
-             BinderException);
-  CHECK_ADBC(AdbcDatabaseInit(database, &error), BinderException);
-}
-
-void InitializeConnection(SharedAdbcConnection &shared_connection) {
-  // Initialize the connection
-  auto *connection = shared_connection.GetConnection();
-  auto *database = shared_connection.GetDatabase();
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcConnectionNew(connection, &error), BinderException);
-  CHECK_ADBC(AdbcConnectionInit(connection, database, &error), BinderException);
-}
-
-void InitializeStatement(SharedAdbcConnection &shared_connection,
-                         Private::AdbcStatement *statement,
-                         const string &query_text) {
-  // Initialize the statement
-  auto *connection = shared_connection.GetConnection();
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcStatementNew(connection, statement, &error), BinderException);
-  CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), &error),
-             BinderException);
-}
-
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri,
                                                const string &query_text)
-    : shared_connection(make_shared_ptr<SharedAdbcConnection>()), statement() {
-  InitializeDatabase(*shared_connection, uri);
-  InitializeConnection(*shared_connection);
-  InitializeStatement(*shared_connection, statement.get(), query_text);
+    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), statement() {
+  connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
-AdbcArrowStreamFactory::AdbcArrowStreamFactory(
-    shared_ptr<SharedAdbcConnection> connection, const string &query_text)
-    : shared_connection(connection), statement() {
-  InitializeStatement(*shared_connection, statement.get(), query_text);
+AdbcArrowStreamFactory::AdbcArrowStreamFactory(AdbcCatalog &catalog,
+                                               const string &query_text)
+    : connection(catalog.GetPooledConnection()), statement() {
+  connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
 AdbcStatement *AdbcArrowStreamFactory::GetStatement() {

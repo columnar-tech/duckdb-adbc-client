@@ -1,5 +1,6 @@
 #pragma once
 
+#include <mutex>
 #include "adbc_catalog.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/transaction/transaction.hpp"
@@ -27,6 +28,7 @@ public:
 
 private:
   Catalog &catalog;
+  std::mutex map_mutex;
   reference_map_t<Transaction, unique_ptr<Transaction>> transactions;
 };
 

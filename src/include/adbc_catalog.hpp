@@ -1,8 +1,7 @@
 #pragma once
 
-#include "adbc_insert.hpp"
+#include "adbc_connection_pool.hpp"
 #include "adbc_raii.hpp"
-#include "adbc_scan.hpp"
 #include "adbc_schema_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
@@ -11,7 +10,6 @@
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/database_size.hpp"
 #include <functional>
-#include <mutex>
 
 namespace duckdb {
 namespace adbc {
@@ -20,18 +18,16 @@ class AdbcCatalog : public Catalog {
 public:
   friend class AdbcSchemaEntry;
   friend class AdbcTableEntry;
-  friend class AdbcTransactionManager;
 
   explicit AdbcCatalog(AttachedDatabase &db, const string &uri)
-      : Catalog(db), uri(uri),
-        shared_connection(make_shared_ptr<SharedAdbcConnection>()) {
-    // Initialize the regular connection
-    InitializeDatabase(*shared_connection, uri);
-    InitializeConnection(*shared_connection);
+      : Catalog(db), uri(uri), pool(uri) {}
+
+  std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
+    return std::unique_lock(mutex);
   }
 
-  shared_ptr<SharedAdbcConnection> GetSharedConnection() {
-    return shared_connection;
+  unique_ptr<AdbcPoolConnection> GetPooledConnection() {
+    return pool.GetConnection();
   }
 
   void Initialize(bool load_builtin) override {}
@@ -90,11 +86,6 @@ public:
   }
 
 private:
-  std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
-    return std::unique_lock(mutex);
-  }
-
-  // These methods assume that the catalog lock is held
   void ForEachCatalog(const char *schema_name, int depth,
                       const std::function<bool(ArrowArray *)> &callback);
   bool SchemaExists(const string &schema_name);
@@ -102,12 +93,11 @@ private:
   vector<string> FetchTableNames(const string &schema_name);
   SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
   SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
-  bool AutocommitEnabled();
 
 private:
-  string uri;
-  shared_ptr<SharedAdbcConnection> shared_connection;
   std::recursive_mutex mutex;
+  string uri;
+  AdbcConnectionPool pool;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };
 

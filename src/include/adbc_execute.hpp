@@ -16,13 +16,11 @@ AdbcExecuteBindFunction(ClientContext &context, TableFunctionBindInput &input,
 class AdbcExecuteFunctionData : public TableFunctionData {
 public:
   explicit AdbcExecuteFunctionData(const string &uri, const string &query_text)
-      : connection(make_uniq<SharedAdbcConnection>()), statement() {
-    InitializeDatabase(*connection, uri);
-    InitializeConnection(*connection);
-    InitializeStatement(*connection, statement.get(), query_text);
+      : connection(make_uniq<AdbcConnection>(uri)), statement() {
+    connection->InitializeStatement(statement.get(), query_text);
   }
 
-  unique_ptr<SharedAdbcConnection> connection;
+  unique_ptr<AdbcConnection> connection;
   Handle<Private::AdbcStatement> statement;
   bool finished = false;
 };

@@ -1,10 +1,12 @@
 #pragma once
 
+#include "adbc_connection_pool.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/main/config.hpp"
 #include "adbc_raii.hpp"
 #include "adbc-vendor/adbc.hpp"
+#include <mutex>
 
 namespace duckdb {
 namespace adbc {
@@ -15,24 +17,20 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
                                               vector<LogicalType> &return_types,
                                               vector<string> &names);
 
-void InitializeDatabase(SharedAdbcConnection &shared_connection,
-                        const string &uri);
-void InitializeConnection(SharedAdbcConnection &shared_connection);
-void InitializeStatement(SharedAdbcConnection &shared_connection,
-                         Private::AdbcStatement *statement,
-                         const string &query_text);
+class AdbcCatalog;
 
 // A factory class that holds the ADBC connection state and produces
 // ArrowArrayStreamWrapper instances
 class AdbcArrowStreamFactory {
 public:
+  // Create an ephemeral connection (i.e., read_adbc(...) is called directly)
   AdbcArrowStreamFactory(const string &uri, const string &query_text);
-  AdbcArrowStreamFactory(shared_ptr<SharedAdbcConnection> connection,
-                         const string &query_text);
+  // Use a connection from the catalog's pool (i.e., SELECT * FROM <adbc>)
+  AdbcArrowStreamFactory(AdbcCatalog &catalog, const string &query_text);
   AdbcStatement *GetStatement();
 
 private:
-  shared_ptr<SharedAdbcConnection> shared_connection;
+  unique_ptr<AdbcPoolConnection> connection;
   Handle<Private::AdbcStatement> statement;
 };
 

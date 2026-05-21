@@ -23,8 +23,7 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
   // Bind a SQL statement and use ADBC to retrieve the metadata for the table
   string sql = StringUtil::Format("SELECT * FROM \"%s\".\"%s\"", schema_name,
                                   table_name);
-  auto factory = make_uniq<AdbcArrowStreamFactory>(
-      adbc_catalog.GetSharedConnection(), sql);
+  auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog, sql);
   auto bind_data =
       make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
   auto col_names = bind_data->arrow_table.GetNames();
@@ -50,8 +49,9 @@ AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
   auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
   try {
-    return GetOrCreateTableEntry(transaction.GetContext(),
-                                 lookup_info.GetEntryName());
+    auto result = GetOrCreateTableEntry(transaction.GetContext(),
+                                        lookup_info.GetEntryName());
+    return result;
   } catch (...) {
     return nullptr;
   }
