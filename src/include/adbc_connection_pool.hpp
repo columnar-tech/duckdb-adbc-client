@@ -47,7 +47,7 @@ private:
 
 class AdbcConnectionPool {
 public:
-  static constexpr const idx_t DEFAULT_MAX_CONNECTIONS = 2;
+  static constexpr const idx_t DEFAULT_MAX_CONNECTIONS = 50;
 
   AdbcConnectionPool(const string &uri,
                      idx_t maximum_connections = DEFAULT_MAX_CONNECTIONS)
