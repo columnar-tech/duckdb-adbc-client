@@ -30,7 +30,7 @@ public:
   AdbcStatement *GetStatement();
 
 private:
-  unique_ptr<AdbcPoolConnection> connection;
+  unique_ptr<AdbcPooledConnection> connection;
   Handle<Private::AdbcStatement> statement;
 };
 

@@ -10,7 +10,7 @@ AdbcAttach(optional_ptr<StorageExtensionInfo> storage_info,
            ClientContext &context, AttachedDatabase &db, const string &name,
            AttachInfo &info, AttachOptions &attach_options) {
   auto uri = info.path;
-  return make_uniq<AdbcCatalog>(db, uri);
+  return make_uniq<AdbcCatalog>(db, context, uri);
 }
 
 static unique_ptr<TransactionManager>

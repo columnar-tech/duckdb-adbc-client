@@ -9,6 +9,7 @@
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/database_size.hpp"
+#include "duckdb/main/client_context.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -19,14 +20,20 @@ public:
   friend class AdbcSchemaEntry;
   friend class AdbcTableEntry;
 
-  explicit AdbcCatalog(AttachedDatabase &db, const string &uri)
-      : Catalog(db), uri(uri), pool(uri) {}
+  explicit AdbcCatalog(AttachedDatabase &db, ClientContext &context,
+                       const string &uri)
+      : Catalog(db), context(context), uri(uri), pool(uri, [&context]() {
+          Value option_value;
+          context.TryGetCurrentSetting("adbc_connection_pool_size",
+                                       option_value);
+          return option_value.GetValue<int64_t>();
+        }()) {}
 
   std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
     return std::unique_lock(mutex);
   }
 
-  unique_ptr<AdbcPoolConnection> GetPooledConnection() {
+  unique_ptr<AdbcPooledConnection> GetPooledConnection() {
     return pool.GetConnection();
   }
 
@@ -97,6 +104,7 @@ private:
 
 private:
   std::recursive_mutex mutex;
+  ClientContext &context;
   string uri;
   AdbcConnectionPool pool;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;

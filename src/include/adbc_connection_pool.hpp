@@ -9,12 +9,12 @@ namespace adbc {
 class AdbcCatalog;
 class AdbcConnectionPool;
 
-class AdbcPoolConnection {
+class AdbcPooledConnection {
 public:
-  AdbcPoolConnection(AdbcConnectionPool *pool, unique_ptr<AdbcConnection> conn,
-                     bool ephemeral)
+  AdbcPooledConnection(AdbcConnectionPool *pool,
+                       unique_ptr<AdbcConnection> conn, bool ephemeral)
       : pool(pool), connection(std::move(conn)), ephemeral(ephemeral) {}
-  ~AdbcPoolConnection();
+  ~AdbcPooledConnection();
 
   AdbcConnection &GetConnection() { return *connection; }
   Private::AdbcConnection *GetRawConnection() {
@@ -22,17 +22,17 @@ public:
   }
 
   // Disable copy constructors
-  AdbcPoolConnection(const AdbcPoolConnection &other) = delete;
-  AdbcPoolConnection &operator=(const AdbcPoolConnection &) = delete;
+  AdbcPooledConnection(const AdbcPooledConnection &other) = delete;
+  AdbcPooledConnection &operator=(const AdbcPooledConnection &) = delete;
 
   // Enable move constructors
-  AdbcPoolConnection(AdbcPoolConnection &&other) noexcept {
+  AdbcPooledConnection(AdbcPooledConnection &&other) noexcept {
     std::swap(pool, other.pool);
     std::swap(connection, other.connection);
     std::swap(ephemeral, other.ephemeral);
   }
 
-  AdbcPoolConnection &operator=(AdbcPoolConnection &&other) noexcept {
+  AdbcPooledConnection &operator=(AdbcPooledConnection &&other) noexcept {
     std::swap(pool, other.pool);
     std::swap(connection, other.connection);
     std::swap(ephemeral, other.ephemeral);
@@ -47,22 +47,19 @@ private:
 
 class AdbcConnectionPool {
 public:
-  static constexpr const idx_t DEFAULT_MAX_CONNECTIONS = 50;
-
-  AdbcConnectionPool(const string &uri,
-                     idx_t maximum_connections = DEFAULT_MAX_CONNECTIONS)
-      : uri(uri), maximum_connections(maximum_connections) {}
+  AdbcConnectionPool(const string &uri, idx_t max_connections)
+      : uri(uri), max_connections(max_connections) {}
 
 public:
-  static unique_ptr<AdbcPoolConnection>
+  static unique_ptr<AdbcPooledConnection>
   GetEphemeralConnection(const string &uri);
-  unique_ptr<AdbcPoolConnection> GetConnection();
+  unique_ptr<AdbcPooledConnection> GetConnection();
   void ReturnConnection(unique_ptr<AdbcConnection> connection);
 
 private:
   idx_t active_connections = 0;
   string uri;
-  idx_t maximum_connections;
+  idx_t max_connections;
   std::mutex connection_mutex;
   vector<unique_ptr<AdbcConnection>> connections;
 };

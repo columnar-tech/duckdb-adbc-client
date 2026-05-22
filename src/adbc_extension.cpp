@@ -60,6 +60,20 @@ static void LoadInternal(ExtensionLoader &loader) {
         }
       },
       SetScope::SESSION);
+
+  // Create a custom knob to control the connection pool size per catalog
+  config.AddExtensionOption(
+      "adbc_connection_pool_size",
+      "The number of connections (default 50) to pool (cache) before the "
+      "catalog creates ephemeral connections to serve requests.",
+      LogicalType::BIGINT, Value::BIGINT(50),
+      [](ClientContext &context, SetScope scope, Value &parameter) {
+        if (parameter.GetValue<int64_t>() <= 0) {
+          throw InvalidInputException(
+              "adbc_connection_pool_size must be greater than zero!");
+        }
+      },
+      SetScope::SESSION);
 }
 
 void AdbcExtension::Load(ExtensionLoader &loader) { LoadInternal(loader); }

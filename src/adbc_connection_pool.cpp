@@ -3,25 +3,25 @@
 namespace duckdb {
 namespace adbc {
 
-AdbcPoolConnection::~AdbcPoolConnection() {
+AdbcPooledConnection::~AdbcPooledConnection() {
   if (!ephemeral) {
     pool->ReturnConnection(std::move(connection));
   }
 }
 
-unique_ptr<AdbcPoolConnection>
+unique_ptr<AdbcPooledConnection>
 AdbcConnectionPool::GetEphemeralConnection(const string &uri) {
-  return make_uniq<AdbcPoolConnection>(nullptr, make_uniq<AdbcConnection>(uri),
-                                       true);
+  return make_uniq<AdbcPooledConnection>(nullptr,
+                                         make_uniq<AdbcConnection>(uri), true);
 }
 
-unique_ptr<AdbcPoolConnection> AdbcConnectionPool::GetConnection() {
+unique_ptr<AdbcPooledConnection> AdbcConnectionPool::GetConnection() {
   std::lock_guard<std::mutex> connection_lock(connection_mutex);
 
   // If there are no available connections
   if (connections.empty()) {
     // Check if the pool cannot grow further
-    if (active_connections == maximum_connections) {
+    if (active_connections == max_connections) {
       // In that case return an ephemeral connection
       return GetEphemeralConnection(uri);
     }
@@ -33,7 +33,8 @@ unique_ptr<AdbcPoolConnection> AdbcConnectionPool::GetConnection() {
   auto free_connection = std::move(connections.back());
   connections.pop_back();
   ++active_connections;
-  return make_uniq<AdbcPoolConnection>(this, std::move(free_connection), false);
+  return make_uniq<AdbcPooledConnection>(this, std::move(free_connection),
+                                         false);
 }
 
 void AdbcConnectionPool::ReturnConnection(
