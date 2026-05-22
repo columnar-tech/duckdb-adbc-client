@@ -389,7 +389,7 @@ string AdbcInsert::GetName() const {
 
 InsertionOrderPreservingMap<string> AdbcInsert::ParamsToString() const {
   InsertionOrderPreservingMap<string> result;
-  result["Table"] = table_name;
+  result["Table"] = schema_name + "." + table_name;
   return result;
 }
 

@@ -5,6 +5,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -49,6 +50,27 @@ AdbcCatalog::LookupSchema(CatalogTransaction transaction,
   return CreateCatalogEntry(name);
 }
 
+bool AdbcCatalog::ContainsAdbcReads(PhysicalOperator &op) {
+
+  // If this operator is a read_adbc function
+  if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+    auto &table_scan = op.Cast<PhysicalTableScan>();
+    if (table_scan.function.name == "read_adbc") {
+      return true;
+    }
+  }
+
+  // If any of this operator's children contains a read_adbc function call
+  for (auto &child : op.children) {
+    if (ContainsAdbcReads(child)) {
+      return true;
+    }
+  }
+
+  // No ADBC reads
+  return false;
+}
+
 PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
@@ -56,6 +78,13 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
 
   // Lock the catalog
   auto catalog_lock = AcquireScopedLock();
+
+  // Check that there are no ADBC reads
+  if (ContainsAdbcReads(plan)) {
+    throw NotImplementedException(
+        "Mixing INSERTs and SELECTs on ADBC tables is not currently supported "
+        "with the ADBC extension.");
+  }
 
   // Ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
   auto &info = op.info;
@@ -100,6 +129,13 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   }
 
   D_ASSERT(plan);
+
+  // Check that there are no ADBC reads
+  if (ContainsAdbcReads(*plan)) {
+    throw NotImplementedException(
+        "Mixing INSERTs and SELECTs on ADBC tables is not currently supported "
+        "with the ADBC extension.");
+  }
 
   // Collect column names & types
   vector<LogicalType> column_types;

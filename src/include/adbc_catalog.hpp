@@ -93,6 +93,7 @@ private:
   vector<string> FetchTableNames(const string &schema_name);
   SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
   SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
+  bool ContainsAdbcReads(PhysicalOperator &op);
 
 private:
   std::recursive_mutex mutex;
