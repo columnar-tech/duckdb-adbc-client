@@ -3,7 +3,7 @@
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/common/arrow/arrow.hpp"
-#include <iostream>
+
 namespace duckdb {
 namespace adbc {
 

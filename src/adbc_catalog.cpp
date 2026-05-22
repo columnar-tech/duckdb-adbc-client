@@ -72,8 +72,10 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
     column_names.push_back(col.GetName());
   }
   auto table_name = info->Base().table;
-  auto &insert = planner.Make<AdbcInsert>(op, column_types, column_names,
-                                          table_name, *this, InsertMode::CTAS);
+  auto schema_name = info->Base().schema;
+  auto &insert =
+      planner.Make<AdbcInsert>(op, column_types, column_names, table_name,
+                               schema_name, *this, InsertMode::CTAS);
   insert.children.push_back(plan);
   return insert;
 }
@@ -109,8 +111,10 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
     column_names.push_back(col.GetName());
   }
   auto table_name = table.name;
-  auto &insert = planner.Make<AdbcInsert>(
-      op, column_types, column_names, table_name, *this, InsertMode::APPEND);
+  auto schema_name = table.schema.name;
+  auto &insert =
+      planner.Make<AdbcInsert>(op, column_types, column_names, table_name,
+                               schema_name, *this, InsertMode::APPEND);
   insert.children.push_back(*plan);
   return insert;
 }

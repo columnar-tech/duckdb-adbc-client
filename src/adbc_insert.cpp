@@ -25,11 +25,12 @@ namespace adbc {
 AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
                        const vector<LogicalType> &types,
                        const vector<string> &names, const string &table_name,
-                       AdbcCatalog &catalog, InsertMode mode)
+                       const string &schema_name, AdbcCatalog &catalog,
+                       InsertMode mode)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types,
                        1),
       column_types(types), column_names(names), table_name(table_name),
-      catalog(catalog), insert_mode(mode) {}
+      schema_name(schema_name), catalog(catalog), insert_mode(mode) {}
 
 //===--------------------------------------------------------------------===//
 // States
@@ -40,11 +41,12 @@ public:
                                  const vector<LogicalType> &types,
                                  const vector<string> &names,
                                  const string &table_name,
+                                 const string &schema_name,
                                  InsertMode insert_mode,
                                  idx_t max_thread_memory)
       : context(context), catalog(catalog), column_types(types),
-        column_names(names), table_name(table_name), insert_mode(insert_mode),
-        collection(context, types),
+        column_names(names), table_name(table_name), schema_name(schema_name),
+        insert_mode(insert_mode), collection(context, types),
         temporary_memory_state(
             TemporaryMemoryManager::Get(context).Register(context)) {
 
@@ -111,6 +113,7 @@ public:
   vector<LogicalType> column_types;
   vector<string> column_names;
   string table_name;
+  string schema_name;
   InsertMode insert_mode;
   ColumnDataCollection collection;
   unique_ptr<TemporaryMemoryState> temporary_memory_state;
@@ -118,9 +121,9 @@ public:
 
 unique_ptr<GlobalSinkState>
 AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
-  return make_uniq<AdbcInsertGlobalState>(context, catalog, column_types,
-                                          column_names, table_name, insert_mode,
-                                          GetMaxThreadMemory(context));
+  return make_uniq<AdbcInsertGlobalState>(
+      context, catalog, column_types, column_names, table_name, schema_name,
+      insert_mode, GetMaxThreadMemory(context));
 }
 
 struct ArrowStreamCollectionData {
@@ -248,6 +251,11 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
         AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_MODE,
                                ADBC_INGEST_OPTION_MODE_APPEND, &error));
   }
+
+  // Set the schema name to perform the insert on
+  CHECK_STATUS(AdbcStatementSetOption(statement.get(),
+                                      ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+                                      gstate.schema_name.c_str(), &error));
 
   // Set the table name to perform the insert on
   CHECK_STATUS(AdbcStatementSetOption(statement.get(),

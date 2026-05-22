@@ -15,12 +15,14 @@ class AdbcInsert : public PhysicalOperator {
 public:
   AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
              const vector<LogicalType> &types, const vector<string> &names,
-             const string &table_name, AdbcCatalog &catalog, InsertMode mode);
+             const string &table_name, const string &schema_name,
+             AdbcCatalog &catalog, InsertMode mode);
 
 private:
   vector<LogicalType> column_types;
   vector<string> column_names;
   string table_name;
+  string schema_name;
   AdbcCatalog &catalog;
   InsertMode insert_mode;
 
