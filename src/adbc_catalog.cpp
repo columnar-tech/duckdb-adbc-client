@@ -6,7 +6,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-
+#include <iostream>
 namespace duckdb {
 namespace adbc {
 
@@ -142,10 +142,34 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   vector<string> column_names;
   auto &table = op.table;
   auto &columns = table.GetColumns();
-  for (auto &col : columns.Logical()) {
-    column_types.push_back(col.GetType());
-    column_names.push_back(col.GetName());
+
+  // Remap columns as required
+  if (!op.column_index_map.empty()) {
+    idx_t column_count = 0;
+    vector<PhysicalIndex> column_indexes;
+    column_indexes.resize(columns.LogicalColumnCount(),
+                          PhysicalIndex(DConstants::INVALID_INDEX));
+    for (idx_t c = 0; c < op.column_index_map.size(); c++) {
+      auto column_index = PhysicalIndex(c);
+      auto mapped_index = op.column_index_map[column_index];
+      if (mapped_index == DConstants::INVALID_INDEX) {
+        continue;
+      }
+      column_indexes[mapped_index] = column_index;
+      column_count++;
+    }
+    for (idx_t c = 0; c < column_count; c++) {
+      auto &col = columns.GetColumn(column_indexes[c]);
+      column_names.push_back(col.GetName());
+      column_types.push_back(col.GetType());
+    }
+  } else {
+    for (auto &col : columns.Logical()) {
+      column_types.push_back(col.GetType());
+      column_names.push_back(col.GetName());
+    }
   }
+
   auto table_name = table.name;
   auto schema_name = table.schema.name;
   auto &insert =
