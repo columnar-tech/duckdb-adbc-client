@@ -2,6 +2,8 @@
 
 #include "adbc_raii.hpp"
 #include <mutex>
+#include <memory>
+#include "duckdb/common/shared_ptr.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -11,7 +13,7 @@ class AdbcConnectionPool;
 
 class AdbcPooledConnection {
 public:
-  AdbcPooledConnection(AdbcConnectionPool *pool,
+  AdbcPooledConnection(shared_ptr<AdbcConnectionPool> pool,
                        unique_ptr<AdbcConnection> conn, bool ephemeral)
       : pool(pool), connection(std::move(conn)), ephemeral(ephemeral) {}
   ~AdbcPooledConnection();
@@ -40,12 +42,12 @@ public:
   }
 
 private:
-  AdbcConnectionPool *pool;
+  shared_ptr<AdbcConnectionPool> pool;
   unique_ptr<AdbcConnection> connection;
   bool ephemeral;
 };
 
-class AdbcConnectionPool {
+class AdbcConnectionPool : public enable_shared_from_this<AdbcConnectionPool> {
 public:
   AdbcConnectionPool(const string &uri, idx_t max_connections)
       : uri(uri), max_connections(max_connections) {}

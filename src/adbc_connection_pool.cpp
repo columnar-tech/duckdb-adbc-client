@@ -33,8 +33,8 @@ unique_ptr<AdbcPooledConnection> AdbcConnectionPool::GetConnection() {
   auto free_connection = std::move(connections.back());
   connections.pop_back();
   ++active_connections;
-  return make_uniq<AdbcPooledConnection>(this, std::move(free_connection),
-                                         false);
+  return make_uniq<AdbcPooledConnection>(shared_from_this(),
+                                         std::move(free_connection), false);
 }
 
 void AdbcConnectionPool::ReturnConnection(

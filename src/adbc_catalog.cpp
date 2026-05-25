@@ -186,7 +186,7 @@ void AdbcCatalog::ForEachCatalog(
   // Retrieve the catalog info from the ADBC connection
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
-  CHECK_ADBC(AdbcConnectionGetObjects(pool.GetConnection()->GetRawConnection(),
+  CHECK_ADBC(AdbcConnectionGetObjects(pool->GetConnection()->GetRawConnection(),
                                       depth, nullptr, schema_name, nullptr,
                                       nullptr, nullptr, stream.get(), &error),
              IOException);

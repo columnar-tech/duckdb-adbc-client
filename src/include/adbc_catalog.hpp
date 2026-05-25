@@ -22,19 +22,20 @@ public:
 
   explicit AdbcCatalog(AttachedDatabase &db, ClientContext &context,
                        const string &uri)
-      : Catalog(db), context(context), uri(uri), pool(uri, [&context]() {
+      : Catalog(db), context(context), uri(uri),
+        pool(make_shared_ptr<AdbcConnectionPool>(uri, [&context]() {
           Value option_value;
           context.TryGetCurrentSetting("adbc_connection_pool_size",
                                        option_value);
           return option_value.GetValue<int64_t>();
-        }()) {}
+        }())) {}
 
   std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
     return std::unique_lock(mutex);
   }
 
   unique_ptr<AdbcPooledConnection> GetPooledConnection() {
-    return pool.GetConnection();
+    return pool->GetConnection();
   }
 
   void Initialize(bool load_builtin) override {}
@@ -106,7 +107,7 @@ private:
   std::recursive_mutex mutex;
   ClientContext &context;
   string uri;
-  AdbcConnectionPool pool;
+  shared_ptr<AdbcConnectionPool> pool;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };
 
