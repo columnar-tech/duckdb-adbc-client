@@ -54,8 +54,6 @@
 #ifdef __cplusplus
 extern "C++" {
 #endif
-/*
-#endif
 
 // Extra guard for versions of Arrow without the canonical guard
 #ifndef ARROW_FLAG_DICTIONARY_ORDERED
@@ -69,18 +67,18 @@ extern "C++" {
 
 struct ArrowSchema {
   // Array type description
-  const char* format;
-  const char* name;
-  const char* metadata;
+  const char *format;
+  const char *name;
+  const char *metadata;
   int64_t flags;
   int64_t n_children;
-  struct ArrowSchema** children;
-  struct ArrowSchema* dictionary;
+  struct ArrowSchema **children;
+  struct ArrowSchema *dictionary;
 
   // Release callback
-  void (*release)(struct ArrowSchema*);
+  void (*release)(struct ArrowSchema *);
   // Opaque producer-specific data
-  void* private_data;
+  void *private_data;
 };
 
 struct ArrowArray {
@@ -90,17 +88,17 @@ struct ArrowArray {
   int64_t offset;
   int64_t n_buffers;
   int64_t n_children;
-  const void** buffers;
-  struct ArrowArray** children;
-  struct ArrowArray* dictionary;
+  const void **buffers;
+  struct ArrowArray **children;
+  struct ArrowArray *dictionary;
 
   // Release callback
-  void (*release)(struct ArrowArray*);
+  void (*release)(struct ArrowArray *);
   // Opaque producer-specific data
-  void* private_data;
+  void *private_data;
 };
 
-#endif  // ARROW_C_DATA_INTERFACE
+#endif // ARROW_C_DATA_INTERFACE
 
 #ifndef ARROW_C_STREAM_INTERFACE
 #define ARROW_C_STREAM_INTERFACE
@@ -112,7 +110,8 @@ struct ArrowArrayStream {
   // Return value: 0 if successful, an `errno`-compatible error code otherwise.
   //
   // If successful, the ArrowSchema must be released independently from the
-stream. int (*get_schema)(struct ArrowArrayStream*, struct ArrowSchema* out);
+  // stream.
+  int (*get_schema)(struct ArrowArrayStream *, struct ArrowSchema *out);
 
   // Callback to get the next array
   // (if no error and the array is released, the stream has ended)
@@ -120,7 +119,8 @@ stream. int (*get_schema)(struct ArrowArrayStream*, struct ArrowSchema* out);
   // Return value: 0 if successful, an `errno`-compatible error code otherwise.
   //
   // If successful, the ArrowArray must be released independently from the
-stream. int (*get_next)(struct ArrowArrayStream*, struct ArrowArray* out);
+  // stream.
+  int (*get_next)(struct ArrowArrayStream *, struct ArrowArray *out);
 
   // Callback to get optional detailed error information.
   // This must only be called if the last stream operation failed
@@ -131,24 +131,23 @@ stream. int (*get_next)(struct ArrowArrayStream*, struct ArrowArray* out);
   //
   // The returned pointer is only valid until the next operation on this stream
   // (including release).
-  const char* (*get_last_error)(struct ArrowArrayStream*);
+  const char *(*get_last_error)(struct ArrowArrayStream *);
 
   // Release callback: release the stream's own resources.
   // Note that arrays returned by `get_next` must be individually released.
-  void (*release)(struct ArrowArrayStream*);
+  void (*release)(struct ArrowArrayStream *);
 
   // Opaque producer-specific data
-  void* private_data;
+  void *private_data;
 };
 
-#endif  // ARROW_C_STREAM_INTERFACE
-#endif  // ARROW_FLAG_DICTIONARY_ORDERED
+#endif // ARROW_C_STREAM_INTERFACE
+#endif // ARROW_FLAG_DICTIONARY_ORDERED
 
 //! @endcond
 
 /// @}
 
-*/
 #ifndef ADBC
 #define ADBC
 

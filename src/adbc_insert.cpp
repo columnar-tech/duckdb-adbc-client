@@ -11,7 +11,7 @@
     Private::AdbcError error = {};                                             \
     AdbcStatusCode status = (EXPR);                                            \
     if (status != ADBC_STATUS_OK) {                                            \
-      lock_guard<mutex> state_lock(gstate.insert_mutex);                    \
+      lock_guard<mutex> state_lock(gstate.insert_mutex);                       \
       gstate.status = status;                                                  \
       gstate.error = error;                                                    \
       return;                                                                  \
