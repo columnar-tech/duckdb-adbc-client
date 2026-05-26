@@ -1,7 +1,16 @@
 #pragma once
 
-#include "adbc-vendor/adbc.hpp"
-#include "adbc-vendor/adbc_driver_manager.hpp"
+#define ADBC_EXPORT
+
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/function/table/arrow.hpp"
+
+namespace Private {
+#include "arrow-adbc/adbc.h"
+#include "arrow-adbc/adbc_driver_manager.h"
+} // namespace Private
+
 #include "duckdb/common/exception/binder_exception.hpp"
 
 namespace duckdb {

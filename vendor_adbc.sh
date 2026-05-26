@@ -29,8 +29,11 @@ cp $DRIVER_MANAGER_PATH/adbc_driver_manager.cc ./src/adbc_driver_manager.cpp
 sed -i 's|^\([[:space:]]*using namespace .*;\)|namespace Private {\n\1|' ./src/adbc_driver_manager.cpp
 sed -i -e '$a } // namespace Private' ./src/adbc_driver_manager.cpp
 
-# Rename headers to point to the vendored headers
-sed -i 's|"arrow-adbc/\([^"]*\)\.h"|"adbc-vendor/\1.hpp"|g' ./src/adbc_driver_manager.cpp
+# Inject vendored header
+sed -i \
+  -e '/#include "arrow-adbc\/adbc\.h"/d' \
+  -e 's/#include "arrow-adbc\/adbc_driver_manager\.h"/#include "adbc_util.hpp"/' \
+  ./src/adbc_driver_manager.cpp
 
 # Clang-format everything to pass CI
 python3 duckdb/scripts/format.py --all --fix --noconfirm --directories src test

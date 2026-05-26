@@ -35,8 +35,7 @@
 #endif // defined(_WIN32)
 
 #include <toml++/toml.hpp>
-#include "adbc-vendor/adbc.hpp"
-#include "adbc-vendor/adbc_driver_manager.hpp"
+#include "adbc_util.hpp"
 #include "current_arch.h"
 
 #include <algorithm>
