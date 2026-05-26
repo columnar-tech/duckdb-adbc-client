@@ -14,8 +14,8 @@ AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri,
 }
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(
-    unique_ptr<AdbcPooledConnection> connection, const string &query_text)
-    : connection(std::move(connection)), statement() {
+    unique_ptr<AdbcPooledConnection> conn, const string &query_text)
+    : connection(std::move(conn)), statement() {
   connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 

@@ -37,14 +37,13 @@ AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
 class AdbcInsertGlobalState : public GlobalSinkState {
 public:
   explicit AdbcInsertGlobalState(
-      ClientContext &context, unique_ptr<AdbcPooledConnection> connection,
+      ClientContext &context, unique_ptr<AdbcPooledConnection> conn,
       const vector<LogicalType> &types, const vector<string> &names,
       const string &table_name, const string &schema_name,
       InsertMode insert_mode, idx_t max_thread_memory)
-      : context(context), connection(std::move(connection)),
-        column_types(types), column_names(names), table_name(table_name),
-        schema_name(schema_name), insert_mode(insert_mode),
-        collection(context, types),
+      : context(context), connection(std::move(conn)), column_types(types),
+        column_names(names), table_name(table_name), schema_name(schema_name),
+        insert_mode(insert_mode), collection(context, types),
         temporary_memory_state(
             TemporaryMemoryManager::Get(context).Register(context)) {
 

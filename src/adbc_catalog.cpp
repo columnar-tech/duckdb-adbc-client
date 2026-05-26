@@ -218,12 +218,14 @@ void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
 
+  auto connection = pool->GetConnection();
+
   // Retrieve the catalog info from the ADBC connection
   Private::AdbcError error = {};
   Handle<ArrowArrayStream> stream = {};
-  CHECK_ADBC(AdbcConnectionGetObjects(pool->GetConnection()->GetRawConnection(),
-                                      depth, nullptr, schema_name, nullptr,
-                                      nullptr, nullptr, stream.get(), &error),
+  CHECK_ADBC(AdbcConnectionGetObjects(connection->GetRawConnection(), depth,
+                                      nullptr, schema_name, nullptr, nullptr,
+                                      nullptr, stream.get(), &error),
              IOException);
 
   while (true) {
