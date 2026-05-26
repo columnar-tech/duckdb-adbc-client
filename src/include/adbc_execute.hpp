@@ -1,8 +1,6 @@
 #pragma once
 
 #include "adbc_raii.hpp"
-#include "adbc_scan.hpp"
-#include "adbc-vendor/adbc.hpp"
 
 namespace duckdb {
 namespace adbc {

@@ -2,7 +2,6 @@
 #include "adbc_catalog.hpp"
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
 
 namespace duckdb {
 namespace adbc {

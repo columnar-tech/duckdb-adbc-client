@@ -1,12 +1,7 @@
 #pragma once
 
 #include "adbc_connection_pool.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
-#include "duckdb/function/table/arrow.hpp"
-#include "duckdb/main/config.hpp"
 #include "adbc_raii.hpp"
-#include "adbc-vendor/adbc.hpp"
-#include <mutex>
 
 namespace duckdb {
 namespace adbc {

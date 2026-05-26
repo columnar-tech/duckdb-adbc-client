@@ -5,7 +5,6 @@
 #include "adbc_schema_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "duckdb/common/arrow/arrow.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/database_size.hpp"

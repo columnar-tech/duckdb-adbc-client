@@ -1,6 +1,5 @@
 #include "adbc_insert.hpp"
 #include "adbc_catalog.hpp"
-#include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include <mutex>
