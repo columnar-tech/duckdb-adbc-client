@@ -1,7 +1,6 @@
 #include "adbc_table_entry.hpp"
-#include "adbc_scan.hpp"
 #include "adbc_catalog.hpp"
-#include "duckdb/main/client_context.hpp"
+#include "adbc_scan.hpp"
 
 namespace duckdb {
 namespace adbc {

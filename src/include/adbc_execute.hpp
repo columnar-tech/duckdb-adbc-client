@@ -1,6 +1,7 @@
 #pragma once
 
 #include "adbc_util.hpp"
+#include "duckdb/original/std/memory.hpp"
 
 namespace duckdb {
 namespace adbc {

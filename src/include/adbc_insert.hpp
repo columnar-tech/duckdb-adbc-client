@@ -1,7 +1,7 @@
 #pragma once
 
-#include "duckdb/execution/physical_operator.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
+#include "duckdb/execution/physical_operator.hpp"
 
 namespace duckdb {
 namespace adbc {

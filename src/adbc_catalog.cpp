@@ -2,10 +2,10 @@
 #include "adbc_insert.hpp"
 #include "adbc_schema_entry.hpp"
 #include "adbc_table_entry.hpp"
+#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
-#include "duckdb/execution/operator/scan/physical_table_scan.hpp"
 
 namespace duckdb {
 namespace adbc {

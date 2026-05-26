@@ -1,10 +1,9 @@
-#include "adbc_util.hpp"
 #include "adbc_insert.hpp"
 #include "adbc_catalog.hpp"
-#include "duckdb/planner/operator/logical_insert.hpp"
+#include "adbc_util.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
-#include <mutex>
 #include <condition_variable>
+#include "duckdb/common/mutex.hpp"
 
 // Check if an ADBC command went wrong, if it did then save the state and return
 #define CHECK_STATUS(EXPR)                                                     \
@@ -12,7 +11,7 @@
     Private::AdbcError error = {};                                             \
     AdbcStatusCode status = (EXPR);                                            \
     if (status != ADBC_STATUS_OK) {                                            \
-      std::lock_guard<std::mutex> state_lock(gstate.mutex);                    \
+      lock_guard<mutex> state_lock(gstate.insert_mutex);                    \
       gstate.status = status;                                                  \
       gstate.error = error;                                                    \
       return;                                                                  \
@@ -63,7 +62,7 @@ public:
   ~AdbcInsertGlobalState() {
     {
       // Acquire the lock to update flags
-      std::lock_guard<std::mutex> state_lock(mutex);
+      lock_guard<mutex> state_lock(insert_mutex);
       // Set the cancel flag
       canceled = true;
       // Set the done flag
@@ -86,10 +85,10 @@ public:
   }
 
   // Insert thread
-  std::thread consumer_thread;
+  thread consumer_thread;
 
   // Synchronization primitives
-  std::mutex mutex;
+  mutex insert_mutex;
   std::condition_variable consumer_cv;
   std::condition_variable producer_cv;
   bool done = false;
@@ -147,7 +146,7 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
     auto &gstate = *data->gstate;
     if (!data->cached_schema) {
       // Acquire the lock to retrieve the schema
-      std::lock_guard<std::mutex> state_lock(gstate.mutex);
+      lock_guard<mutex> state_lock(gstate.insert_mutex);
       data->cached_schema = make_uniq<ArrowSchema>();
       auto properties = gstate.context.GetClientProperties();
       ArrowConverter::ToArrowSchema(data->cached_schema.get(),
@@ -165,7 +164,7 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
 
     {
       // Acquire the lock
-      std::unique_lock<std::mutex> state_lock(gstate.mutex);
+      unique_lock<mutex> state_lock(gstate.insert_mutex);
 
       // Wait for the buffer to be full or done
       gstate.consumer_cv.wait(state_lock,
@@ -222,7 +221,7 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
     auto &gstate = *data->gstate;
     {
       // Acquire lock and notifying done
-      std::unique_lock<std::mutex> state_lock(gstate.mutex);
+      unique_lock<mutex> state_lock(gstate.insert_mutex);
       gstate.done = true;
     }
     gstate.producer_cv.notify_one();
@@ -280,7 +279,7 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
 
   {
     // Acquire the lock
-    std::unique_lock<std::mutex> state_lock(gstate.mutex);
+    unique_lock<mutex> state_lock(gstate.insert_mutex);
 
     // Immediately insert the first chunk for responsive error handling
     bool first_chunk = false;
@@ -289,7 +288,7 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk,
     if (gstate.first_insert) {
       first_chunk = true;
       gstate.first_insert = false;
-      gstate.consumer_thread = std::thread(AsyncInsert, std::ref(gstate));
+      gstate.consumer_thread = thread(AsyncInsert, std::ref(gstate));
     }
 
     // Wait until the buffer is not full or we are done
@@ -329,7 +328,7 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline, Event &event,
 
   // Signal that all data has been sent
   {
-    std::lock_guard<std::mutex> state_lock(gstate.mutex);
+    lock_guard<mutex> state_lock(gstate.insert_mutex);
     gstate.done = true;
   }
 
@@ -363,7 +362,7 @@ SourceResultType AdbcInsert::GetData(ExecutionContext &context,
   auto &gstate = sink_state->Cast<AdbcInsertGlobalState>();
   {
     // Acquire the lock before fetching the insert count
-    std::lock_guard<std::mutex> state_lock(gstate.mutex);
+    lock_guard<mutex> state_lock(gstate.insert_mutex);
     chunk.SetCardinality(1);
     chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
   }

@@ -1,10 +1,10 @@
 #define DUCKDB_EXTENSION_MAIN
 
 #include "adbc_extension.hpp"
-#include "adbc_util.hpp"
 #include "adbc_execute.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_storage.hpp"
+#include "adbc_util.hpp"
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"

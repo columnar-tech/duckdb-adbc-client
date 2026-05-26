@@ -2,8 +2,8 @@
 #include "adbc_catalog.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_table_entry.hpp"
-#include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/common/exception/catalog_exception.hpp"
+#include "duckdb/parser/parsed_data/create_table_info.hpp"
 
 namespace duckdb {
 namespace adbc {

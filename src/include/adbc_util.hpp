@@ -1,6 +1,5 @@
 #pragma once
 
-#include <memory>
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"

@@ -1,14 +1,14 @@
 #pragma once
-
 #include "adbc_connection_pool.hpp"
-#include "adbc_util.hpp"
 #include "adbc_schema_entry.hpp"
+#include "adbc_util.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
 #include "duckdb/common/case_insensitive_map.hpp"
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 #include "duckdb/storage/database_size.hpp"
-#include "duckdb/main/client_context.hpp"
 #include <functional>
 
 namespace duckdb {
@@ -29,8 +29,8 @@ public:
           return option_value.GetValue<int64_t>();
         }())) {}
 
-  std::unique_lock<std::recursive_mutex> AcquireScopedLock() {
-    return std::unique_lock(mutex);
+  unique_lock<std::recursive_mutex> AcquireScopedLock() {
+    return unique_lock(mutex);
   }
 
   unique_ptr<AdbcPooledConnection> GetPooledConnection() {

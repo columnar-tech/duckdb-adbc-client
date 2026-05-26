@@ -2,6 +2,7 @@
 
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
+#include "duckdb/original/std/memory.hpp"
 #include "duckdb/planner/parsed_data/bound_create_table_info.hpp"
 
 namespace duckdb {

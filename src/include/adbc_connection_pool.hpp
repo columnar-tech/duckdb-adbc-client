@@ -1,9 +1,9 @@
 #pragma once
 
 #include "adbc_util.hpp"
-#include <mutex>
-#include <memory>
 #include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/original/std/memory.hpp"
+#include "duckdb/common/mutex.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -62,7 +62,7 @@ private:
   idx_t active_connections = 0;
   string uri;
   idx_t max_connections;
-  std::mutex connection_mutex;
+  mutex connection_mutex;
   vector<unique_ptr<AdbcConnection>> connections;
 };
 

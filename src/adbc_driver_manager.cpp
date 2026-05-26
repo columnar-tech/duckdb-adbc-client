@@ -27,17 +27,17 @@
 #include <KnownFolders.h>
 #include <ShlObj.h>
 #include <libloaderapi.h>
+#include <locale>
 #include <string.h> // _wcsnicmp
 #include <strsafe.h>
-#include <locale>
 #else
 #include <dlfcn.h>
 #endif // defined(_WIN32)
 
-#include <toml++/toml.hpp>
 #include "adbc-vendor/adbc.hpp"
 #include "adbc-vendor/adbc_driver_manager.hpp"
 #include "current_arch.h"
+#include <toml++/toml.hpp>
 
 #include <algorithm>
 #include <array>

@@ -1,4 +1,3 @@
-#include "duckdb/common/types.hpp"
 #include "adbc_execute.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_util.hpp"
