@@ -1,6 +1,6 @@
 #include "adbc_scan.hpp"
-#include "adbc_catalog.hpp"
 #include "adbc_util.hpp"
+#include "duckdb/main/config.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -13,9 +13,9 @@ AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri,
   connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
-AdbcArrowStreamFactory::AdbcArrowStreamFactory(AdbcCatalog &catalog,
-                                               const string &query_text)
-    : connection(catalog.GetPooledConnection()), statement() {
+AdbcArrowStreamFactory::AdbcArrowStreamFactory(
+    unique_ptr<AdbcPooledConnection> connection, const string &query_text)
+    : connection(std::move(connection)), statement() {
   connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 

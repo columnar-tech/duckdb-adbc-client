@@ -16,9 +16,6 @@ namespace adbc {
 
 class AdbcCatalog : public Catalog {
 public:
-  friend class AdbcSchemaEntry;
-  friend class AdbcTableEntry;
-
   explicit AdbcCatalog(AttachedDatabase &db, ClientContext &context,
                        const string &uri)
       : Catalog(db), context(context), uri(uri),
@@ -33,10 +30,8 @@ public:
     return unique_lock(mutex);
   }
 
-  unique_ptr<AdbcPooledConnection> GetPooledConnection() {
-    return pool->GetConnection();
-  }
-
+  unique_ptr<AdbcPooledConnection> GetPooledConnection();
+  vector<string> FetchTableNames(const string &schema_name);
   void Initialize(bool load_builtin) override {}
   string GetCatalogType() override { return "adbc"; }
 
@@ -97,7 +92,6 @@ private:
                       const std::function<bool(ArrowArray *)> &callback);
   bool SchemaExists(const string &schema_name);
   vector<string> FetchSchemaNames();
-  vector<string> FetchTableNames(const string &schema_name);
   SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
   SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
   bool ContainsAdbcReads(PhysicalOperator &op);

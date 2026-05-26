@@ -12,8 +12,6 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
                                               vector<LogicalType> &return_types,
                                               vector<string> &names);
 
-class AdbcCatalog;
-
 // A factory class that holds the ADBC connection state and produces
 // ArrowArrayStreamWrapper instances
 class AdbcArrowStreamFactory {
@@ -21,7 +19,8 @@ public:
   // Create an ephemeral connection (i.e., read_adbc(...) is called directly)
   AdbcArrowStreamFactory(const string &uri, const string &query_text);
   // Use a connection from the catalog's pool (i.e., SELECT * FROM <adbc>)
-  AdbcArrowStreamFactory(AdbcCatalog &catalog, const string &query_text);
+  AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection,
+                         const string &query_text);
   AdbcStatement *GetStatement();
 
 private:

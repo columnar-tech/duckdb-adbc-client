@@ -10,6 +10,61 @@
 namespace duckdb {
 namespace adbc {
 
+unique_ptr<AdbcPooledConnection> AdbcCatalog::GetPooledConnection() {
+  // Lock the catalog
+  auto catalog_lock = AcquireScopedLock();
+  return pool->GetConnection();
+}
+
+vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
+  // Lock the catalog
+  auto catalog_lock = AcquireScopedLock();
+
+  // Collect all table names
+  vector<string> table_names;
+  ForEachCatalog(
+      schema_name.c_str(), ADBC_OBJECT_DEPTH_TABLES,
+      [&table_names](ArrowArray *batch) {
+        // Get the catalogs
+        auto *catalogs = batch;
+        auto *catalog_schemas_list = batch->children[1];
+        for (int64_t i = 0; i < catalogs->length; ++i) {
+          auto *schema_offsets = reinterpret_cast<const int32_t *>(
+              catalog_schemas_list->buffers[1]);
+          auto schema_start = schema_offsets[i];
+          auto schema_end = schema_offsets[i + 1];
+
+          auto *schemas_struct = catalog_schemas_list->children[0];
+
+          // Get the schemas for this catalog
+          for (int32_t j = schema_start; j < schema_end; ++j) {
+            auto *tables_list = schemas_struct->children[1];
+            auto *table_offsets =
+                reinterpret_cast<const int32_t *>(tables_list->buffers[1]);
+            auto table_start = table_offsets[j];
+            auto table_end = table_offsets[j + 1];
+
+            auto *table_struct = tables_list->children[0];
+            auto *table_names_array = table_struct->children[0];
+
+            auto *name_offsets = reinterpret_cast<const int32_t *>(
+                table_names_array->buffers[1]);
+            auto *name_data =
+                reinterpret_cast<const char *>(table_names_array->buffers[2]);
+
+            // Get the tables for each schema
+            for (int32_t k = table_start; k < table_end; ++k) {
+              auto start = name_offsets[k];
+              auto end = name_offsets[k + 1];
+              table_names.emplace_back(name_data + start, end - start);
+            }
+          }
+        }
+        return true;
+      });
+  return table_names;
+}
+
 void AdbcCatalog::ScanSchemas(
     ClientContext &context,
     std::function<void(SchemaCatalogEntry &)> callback) {
@@ -50,27 +105,6 @@ AdbcCatalog::LookupSchema(CatalogTransaction transaction,
   return CreateCatalogEntry(name);
 }
 
-bool AdbcCatalog::ContainsAdbcReads(PhysicalOperator &op) {
-
-  // If this operator is a read_adbc function
-  if (op.type == PhysicalOperatorType::TABLE_SCAN) {
-    auto &table_scan = op.Cast<PhysicalTableScan>();
-    if (table_scan.function.name == "read_adbc") {
-      return true;
-    }
-  }
-
-  // If any of this operator's children contains a read_adbc function call
-  for (auto &child : op.children) {
-    if (ContainsAdbcReads(child)) {
-      return true;
-    }
-  }
-
-  // No ADBC reads
-  return false;
-}
-
 PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
@@ -104,7 +138,7 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
   auto schema_name = info->Base().schema;
   auto &insert =
       planner.Make<AdbcInsert>(op, column_types, column_names, table_name,
-                               schema_name, *this, InsertMode::CTAS);
+                               schema_name, pool, InsertMode::CTAS);
   insert.children.push_back(plan);
   return insert;
 }
@@ -174,11 +208,12 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   auto schema_name = table.schema.name;
   auto &insert =
       planner.Make<AdbcInsert>(op, column_types, column_names, table_name,
-                               schema_name, *this, InsertMode::APPEND);
+                               schema_name, pool, InsertMode::APPEND);
   insert.children.push_back(*plan);
   return insert;
 }
 
+// Private methods below assume the catalog lock is held
 void AdbcCatalog::ForEachCatalog(
     const char *schema_name, int depth,
     const std::function<bool(ArrowArray *)> &callback) {
@@ -255,52 +290,6 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
   return schema_names;
 }
 
-vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
-  // Collect all table names
-  vector<string> table_names;
-  ForEachCatalog(
-      schema_name.c_str(), ADBC_OBJECT_DEPTH_TABLES,
-      [&table_names](ArrowArray *batch) {
-        // Get the catalogs
-        auto *catalogs = batch;
-        auto *catalog_schemas_list = batch->children[1];
-        for (int64_t i = 0; i < catalogs->length; ++i) {
-          auto *schema_offsets = reinterpret_cast<const int32_t *>(
-              catalog_schemas_list->buffers[1]);
-          auto schema_start = schema_offsets[i];
-          auto schema_end = schema_offsets[i + 1];
-
-          auto *schemas_struct = catalog_schemas_list->children[0];
-
-          // Get the schemas for this catalog
-          for (int32_t j = schema_start; j < schema_end; ++j) {
-            auto *tables_list = schemas_struct->children[1];
-            auto *table_offsets =
-                reinterpret_cast<const int32_t *>(tables_list->buffers[1]);
-            auto table_start = table_offsets[j];
-            auto table_end = table_offsets[j + 1];
-
-            auto *table_struct = tables_list->children[0];
-            auto *table_names_array = table_struct->children[0];
-
-            auto *name_offsets = reinterpret_cast<const int32_t *>(
-                table_names_array->buffers[1]);
-            auto *name_data =
-                reinterpret_cast<const char *>(table_names_array->buffers[2]);
-
-            // Get the tables for each schema
-            for (int32_t k = table_start; k < table_end; ++k) {
-              auto start = name_offsets[k];
-              auto end = name_offsets[k + 1];
-              table_names.emplace_back(name_data + start, end - start);
-            }
-          }
-        }
-        return true;
-      });
-  return table_names;
-}
-
 SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
   // Look up the entry
   auto it = owned_schemas.find(schema_name);
@@ -324,5 +313,27 @@ SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
   owned_schemas[schema_name] = std::move(schema_entry);
   return ptr;
 }
+
+bool AdbcCatalog::ContainsAdbcReads(PhysicalOperator &op) {
+
+  // If this operator is a read_adbc function
+  if (op.type == PhysicalOperatorType::TABLE_SCAN) {
+    auto &table_scan = op.Cast<PhysicalTableScan>();
+    if (table_scan.function.name == "read_adbc") {
+      return true;
+    }
+  }
+
+  // If any of this operator's children contains a read_adbc function call
+  for (auto &child : op.children) {
+    if (ContainsAdbcReads(child)) {
+      return true;
+    }
+  }
+
+  // No ADBC reads
+  return false;
+}
+
 } // namespace adbc
 } // namespace duckdb

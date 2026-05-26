@@ -1,5 +1,5 @@
+#include "duckdb/main/client_context.hpp"
 #include "adbc_insert.hpp"
-#include "adbc_catalog.hpp"
 #include "adbc_util.hpp"
 #include "duckdb/storage/temporary_memory_manager.hpp"
 #include <condition_variable>
@@ -24,28 +24,27 @@ namespace adbc {
 AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan, LogicalOperator &op,
                        const vector<LogicalType> &types,
                        const vector<string> &names, const string &table_name,
-                       const string &schema_name, AdbcCatalog &catalog,
-                       InsertMode mode)
+                       const string &schema_name,
+                       shared_ptr<AdbcConnectionPool> pool, InsertMode mode)
     : PhysicalOperator(physical_plan, PhysicalOperatorType::EXTENSION, op.types,
                        1),
       column_types(types), column_names(names), table_name(table_name),
-      schema_name(schema_name), catalog(catalog), insert_mode(mode) {}
+      schema_name(schema_name), pool(pool), insert_mode(mode) {}
 
 //===--------------------------------------------------------------------===//
 // States
 //===--------------------------------------------------------------------===//
 class AdbcInsertGlobalState : public GlobalSinkState {
 public:
-  explicit AdbcInsertGlobalState(ClientContext &context, AdbcCatalog &catalog,
-                                 const vector<LogicalType> &types,
-                                 const vector<string> &names,
-                                 const string &table_name,
-                                 const string &schema_name,
-                                 InsertMode insert_mode,
-                                 idx_t max_thread_memory)
-      : context(context), catalog(catalog), column_types(types),
-        column_names(names), table_name(table_name), schema_name(schema_name),
-        insert_mode(insert_mode), collection(context, types),
+  explicit AdbcInsertGlobalState(
+      ClientContext &context, unique_ptr<AdbcPooledConnection> connection,
+      const vector<LogicalType> &types, const vector<string> &names,
+      const string &table_name, const string &schema_name,
+      InsertMode insert_mode, idx_t max_thread_memory)
+      : context(context), connection(std::move(connection)),
+        column_types(types), column_names(names), table_name(table_name),
+        schema_name(schema_name), insert_mode(insert_mode),
+        collection(context, types),
         temporary_memory_state(
             TemporaryMemoryManager::Get(context).Register(context)) {
 
@@ -106,7 +105,7 @@ public:
 
   // Insert state
   ClientContext &context;
-  AdbcCatalog &catalog;
+  unique_ptr<AdbcPooledConnection> connection;
   idx_t insert_count = 0;
   int64_t rows_affected = 0;
   vector<LogicalType> column_types;
@@ -121,8 +120,8 @@ public:
 unique_ptr<GlobalSinkState>
 AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
   return make_uniq<AdbcInsertGlobalState>(
-      context, catalog, column_types, column_names, table_name, schema_name,
-      insert_mode, GetMaxThreadMemory(context));
+      context, pool->GetConnection(), column_types, column_names, table_name,
+      schema_name, insert_mode, GetMaxThreadMemory(context));
 }
 
 struct ArrowStreamCollectionData {
@@ -233,8 +232,7 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate,
 static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 
   // Get the ADBC connection
-  auto pooled_connection = gstate.catalog.GetPooledConnection();
-  auto *connection = pooled_connection->GetRawConnection();
+  auto *connection = gstate.connection->GetRawConnection();
 
   // Wrap the buffered data as an ArrowArrayStream
   Handle<ArrowArrayStream> stream = {};

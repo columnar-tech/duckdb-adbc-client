@@ -23,7 +23,8 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
   // Bind a SQL statement and use ADBC to retrieve the metadata for the table
   string sql = StringUtil::Format("SELECT * FROM \"%s\".\"%s\"", schema_name,
                                   table_name);
-  auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog, sql);
+  auto factory = make_uniq<AdbcArrowStreamFactory>(
+      adbc_catalog.GetPooledConnection(), sql);
   auto bind_data =
       make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
   auto col_names = bind_data->arrow_table.GetNames();
@@ -70,7 +71,7 @@ void AdbcSchemaEntry::Scan(
   }
 
   auto schema_name = this->name;
-  auto uri = adbc_catalog.uri;
+  auto uri = adbc_catalog.GetDBPath();
 
   // For each ADBC table in the schema, get or create an entry for it
   for (const auto &table_name : adbc_catalog.FetchTableNames(schema_name)) {
