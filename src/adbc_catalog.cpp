@@ -6,7 +6,7 @@
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
 #include "duckdb/execution/operator/scan/physical_table_scan.hpp"
-#include <iostream>
+
 namespace duckdb {
 namespace adbc {
 

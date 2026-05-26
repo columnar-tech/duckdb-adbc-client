@@ -1,3 +1,4 @@
+#include "adbc_util.hpp"
 #include "adbc_insert.hpp"
 #include "adbc_catalog.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"

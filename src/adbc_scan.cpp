@@ -1,7 +1,6 @@
 #include "adbc_scan.hpp"
 #include "adbc_catalog.hpp"
-#include "adbc-vendor/adbc.hpp"
-#include "adbc-vendor/adbc_driver_manager.hpp"
+#include "adbc_util.hpp"
 
 namespace duckdb {
 namespace adbc {

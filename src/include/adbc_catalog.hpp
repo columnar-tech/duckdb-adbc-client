@@ -1,7 +1,7 @@
 #pragma once
 
 #include "adbc_connection_pool.hpp"
-#include "adbc_raii.hpp"
+#include "adbc_util.hpp"
 #include "adbc_schema_entry.hpp"
 #include "duckdb/catalog/catalog.hpp"
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"

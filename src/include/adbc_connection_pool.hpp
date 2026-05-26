@@ -1,6 +1,6 @@
 #pragma once
 
-#include "adbc_raii.hpp"
+#include "adbc_util.hpp"
 #include <mutex>
 #include <memory>
 #include "duckdb/common/shared_ptr.hpp"

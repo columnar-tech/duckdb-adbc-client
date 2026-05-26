@@ -1,7 +1,7 @@
 #pragma once
 
 #include "adbc_connection_pool.hpp"
-#include "adbc_raii.hpp"
+#include "adbc_util.hpp"
 
 namespace duckdb {
 namespace adbc {
