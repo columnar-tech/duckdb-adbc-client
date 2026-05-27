@@ -165,9 +165,15 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
   // If there are ADBC reads and we cannot mix reads and writes
   if (ContainsAdbcReads(*plan) && !can_mix_reads_writes) {
     throw NotImplementedException(
-        "To avoid concurrency issues, INSERTs on ADBC tables cannot also read "
-        "ADBC tables.\n"
-        "To override this behavior, run \"SET adbc_mix_reads_writes = true;\"");
+        "This INSERT statement mixes ADBC reads and writes, which may cause "
+        "concurrency issues "
+        "depending on the underlying DBMS's transaction isolation level.\n"
+        "If the reads and writes target different DBMSs, this is likely "
+        "safe; "
+        "if they target the same DBMS, consistency depends on that "
+        "DBMS's isolation guarantees.\n"
+        "If you believe this INSERT is safe, turn off this check by running "
+        "\"SET adbc_mix_reads_writes = true;\"");
   }
 
   // Collect column names & types
