@@ -45,6 +45,14 @@ static void LoadInternal(ExtensionLoader &loader) {
   auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
   config.storage_extensions["adbc"] = make_uniq<adbc::AdbcStorageExtension>();
 
+  // Create a custom knob to control whether concurrent ADBC reads and writes
+  // are supported
+  config.AddExtensionOption("adbc_mix_reads_writes",
+                            "Whether ADBC reads and writes can be mixed within "
+                            "the same SQL statement (default false).",
+                            LogicalType::BOOLEAN, Value::BOOLEAN(false),
+                            nullptr, SetScope::SESSION);
+
   // Create a custom knob to control the buffer size for inserts
   config.AddExtensionOption(
       "adbc_insert_batch_size",

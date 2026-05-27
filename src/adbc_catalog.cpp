@@ -113,13 +113,6 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
   // Lock the catalog
   auto catalog_lock = AcquireScopedLock();
 
-  // Check that there are no ADBC reads
-  if (ContainsAdbcReads(plan)) {
-    throw NotImplementedException(
-        "Mixing INSERTs and SELECTs on ADBC tables is not currently supported "
-        "with the ADBC extension.");
-  }
-
   // Ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
   auto &info = op.info;
   if (info->Base().on_conflict != OnCreateConflict::ERROR_ON_CONFLICT) {
@@ -164,11 +157,17 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
 
   D_ASSERT(plan);
 
-  // Check that there are no ADBC reads
-  if (ContainsAdbcReads(*plan)) {
+  // Check whether we can mix ADBC reads and writes
+  Value option_value;
+  context.TryGetCurrentSetting("adbc_mix_reads_writes", option_value);
+  bool can_mix_reads_writes = option_value.GetValue<bool>();
+
+  // If there are ADBC reads and we cannot mix reads and writes
+  if (ContainsAdbcReads(*plan) && !can_mix_reads_writes) {
     throw NotImplementedException(
-        "Mixing INSERTs and SELECTs on ADBC tables is not currently supported "
-        "with the ADBC extension.");
+        "To avoid concurrency issues, INSERTs on ADBC tables cannot also read "
+        "ADBC tables.\n"
+        "To override this behavior, run \"SET adbc_mix_reads_writes = true;\"");
   }
 
   // Collect column names & types
