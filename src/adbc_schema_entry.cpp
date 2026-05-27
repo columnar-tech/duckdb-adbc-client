@@ -10,6 +10,7 @@ namespace adbc {
 
 CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
                                                      const string &table_name) {
+
   // Return the entry if it already exists
   auto it = owned_tables.find(table_name);
   if (it != owned_tables.end()) {
@@ -18,15 +19,20 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context,
 
   // Create the entry to be inserted
   auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+  auto delimiter = adbc_catalog.GetDelimiter();
   auto schema_name = this->name;
+  auto quoted_schema_name = delimiter[0] + schema_name + delimiter[1];
+  auto quoted_table_name = delimiter[0] + table_name + delimiter[1];
 
   // Bind a SQL statement and use ADBC to retrieve the metadata for the table
-  string sql = StringUtil::Format("SELECT * FROM \"%s\".\"%s\"", schema_name,
-                                  table_name);
+  string sql = StringUtil::Format("SELECT * FROM  %s.%s", quoted_schema_name,
+                                  quoted_table_name);
+
   auto factory = make_uniq<AdbcArrowStreamFactory>(
       adbc_catalog.GetPooledConnection(), sql);
   auto bind_data =
       make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+
   auto col_names = bind_data->arrow_table.GetNames();
   auto col_types = bind_data->arrow_table.GetTypes();
   auto table_info = make_uniq<CreateTableInfo>(*this, table_name);
@@ -50,9 +56,8 @@ AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
   auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
   try {
-    auto result = GetOrCreateTableEntry(transaction.GetContext(),
-                                        lookup_info.GetEntryName());
-    return result;
+    return GetOrCreateTableEntry(transaction.GetContext(),
+                                 lookup_info.GetEntryName());
   } catch (...) {
     return nullptr;
   }
@@ -75,7 +80,9 @@ void AdbcSchemaEntry::Scan(
 
   // For each ADBC table in the schema, get or create an entry for it
   for (const auto &table_name : adbc_catalog.FetchTableNames(schema_name)) {
-    callback(*GetOrCreateTableEntry(context, table_name));
+    if (auto *entry = GetOrCreateTableEntry(context, table_name)) {
+      callback(*entry);
+    }
   }
 }
 

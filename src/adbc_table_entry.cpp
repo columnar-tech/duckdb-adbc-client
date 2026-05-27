@@ -17,8 +17,11 @@ AdbcTableEntry::GetScanFunction(ClientContext &context,
   auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
   // construct an ADBC scan function using a new connection object for the scan
-  auto qualified_name = StringUtil::Format("\"%s\".\"%s\"", schema.name, name);
-  auto sql = "SELECT * FROM " + qualified_name;
+  auto delimiter = adbc_catalog.GetDelimiter();
+  auto quoted_schema_name = delimiter[0] + schema.name + delimiter[1];
+  auto quoted_table_name = delimiter[0] + name + delimiter[1];
+  auto sql = StringUtil::Format(" SELECT * FROM %s.%s", quoted_schema_name,
+                                quoted_table_name);
   auto adbc_arrow_stream_factory = make_uniq<AdbcArrowStreamFactory>(
       adbc_catalog.GetPooledConnection(), sql);
   auto arrow_function_data = make_uniq<AdbcArrowScanFunctionData>(

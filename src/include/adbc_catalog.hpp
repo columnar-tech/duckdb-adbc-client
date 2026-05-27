@@ -17,8 +17,8 @@ namespace adbc {
 class AdbcCatalog : public Catalog {
 public:
   explicit AdbcCatalog(AttachedDatabase &db, ClientContext &context,
-                       const string &uri)
-      : Catalog(db), context(context), uri(uri),
+                       const string &uri, const string &delimiter)
+      : Catalog(db), context(context), uri(uri), delimiter(delimiter),
         pool(make_shared_ptr<AdbcConnectionPool>(uri, [&context]() {
           Value option_value;
           context.TryGetCurrentSetting("adbc_connection_pool_size",
@@ -63,6 +63,7 @@ public:
   }
   bool InMemory() override { return false; }
   string GetDBPath() override { return uri; }
+  const string &GetDelimiter() const { return delimiter; }
   PhysicalOperator &PlanCreateTableAs(ClientContext &context,
                                       PhysicalPlanGenerator &planner,
                                       LogicalCreateTable &op,
@@ -100,6 +101,7 @@ private:
   std::recursive_mutex mutex;
   ClientContext &context;
   string uri;
+  string delimiter;
   shared_ptr<AdbcConnectionPool> pool;
   case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
 };
