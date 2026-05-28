@@ -2,6 +2,7 @@
 
 #include "adbc_extension.hpp"
 #include "adbc_execute.hpp"
+#include "adbc_clear_cache.hpp"
 #include "adbc_scan.hpp"
 #include "adbc_storage.hpp"
 #include "adbc_util.hpp"
@@ -39,6 +40,13 @@ static void LoadInternal(ExtensionLoader &loader) {
                                         adbc::AdbcExecuteFunction,
                                         adbc::AdbcExecuteBindFunction);
     loader.RegisterFunction(adbc_execute_function);
+
+    // Construct an adbc_execute(uri, query) to perform DML via ADBC
+    TableFunction adbc_clear_cache_function("adbc_clear_cache",
+                                            {},
+                                            adbc::AdbcClearCacheFunction,
+                                            adbc::AdbcClearCacheBindFunction);
+    loader.RegisterFunction(adbc_clear_cache_function);
 
     // Storage extension for ATTACH
     auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());

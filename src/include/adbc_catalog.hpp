@@ -37,6 +37,7 @@ public:
         return "adbc";
     }
 
+    void ClearCache();
     void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
     optional_ptr<SchemaCatalogEntry> LookupSchema(CatalogTransaction transaction,
                                                   const EntryLookupInfo &schema_lookup,

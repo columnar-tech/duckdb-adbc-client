@@ -20,6 +20,8 @@ void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input, Data
     CHECK_ADBC(AdbcStatementExecuteQuery(function_data.statement.get(), nullptr, nullptr, &error), IOException);
 
     // Mark as completed
+    output.SetCardinality(1);
+    output.SetValue(0, 0, Value::BOOLEAN(true));
     function_data.finished = true;
 }
 

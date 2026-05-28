@@ -59,6 +59,15 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
     return table_names;
 }
 
+void AdbcCatalog::ClearCache() {
+
+    // Lock the catalog
+    auto catalog_lock = AcquireScopedLock();
+
+    // Delete all schemas
+    owned_schemas.clear();
+}
+
 void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
 
     // Lock the catalog
