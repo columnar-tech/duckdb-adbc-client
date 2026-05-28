@@ -90,9 +90,9 @@ optional_ptr<SchemaCatalogEntry> AdbcCatalog::LookupSchema(CatalogTransaction tr
 
     // Throw an exception if the schema doesn't exist
     if (!SchemaExists(name)) {
-	if (if_not_found == OnEntryNotFound::RETURN_NULL) {
-	    return nullptr;
-	}
+        if (if_not_found == OnEntryNotFound::RETURN_NULL) {
+            return nullptr;
+        }
         throw IOException("Unable to find schema with name: \"%s\"", name);
     }
 
