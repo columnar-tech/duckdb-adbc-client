@@ -41,7 +41,7 @@ dbc install snowflake
 
 ## Extension Installation
 
-You can install the DuckDB extension by running:
+You can install the ADBC extension by running:
 
 ```sql
 INSTALL adbc FROM community;
@@ -95,6 +95,12 @@ To perform arbitrary operations through ADBC, you can call the `adbc_execute` fu
 
 ```sql
 D CALL adbc_execute('postgresql://localhost:5432/demo', 'DROP TABLE public.games');
+┌─────────┐
+│ Success │
+│ boolean │
+├─────────┤
+│ true    │
+└─────────┘
 ```
 
 ### ATTACH
@@ -156,7 +162,7 @@ D SELECT * FROM game_inventors;
 
 ### Custom Delimiters
 
-By default, `ATTACH` delimits all SQL queries with double quotes, i.e., `SELECT * FROM "schema"."table"`
+By default, `ATTACH` delimits all SQL queries with double quotes (i.e., `SELECT * FROM "schema"."table"`).
 
 The `DELIMITER` option adds support for systems with different schema/table delimiters (i.e., `[schema].[table]` for SQL Server).
 
@@ -172,6 +178,12 @@ To clear the cached metadata (i.e., after a remote update), you can invoke `adbc
 
 ```sql
 D CALL adbc_clear_cache();
+┌─────────┐
+│ Success │
+│ boolean │
+├─────────┤
+│ true    │
+└─────────┘
 ```
 
 ## Advanced Features
