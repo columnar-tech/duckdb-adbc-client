@@ -7,44 +7,41 @@ namespace adbc {
 
 using namespace Private;
 
-void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input,
-                         DataChunk &output) {
+void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
 
-  // Return if we already executed the command
-  auto &function_data = input.bind_data->CastNoConst<AdbcExecuteFunctionData>();
-  if (function_data.finished) {
-    return;
-  }
+    // Return if we already executed the command
+    auto &function_data = input.bind_data->CastNoConst<AdbcExecuteFunctionData>();
+    if (function_data.finished) {
+        return;
+    }
 
-  // Execute the command
-  AdbcError error = {};
-  CHECK_ADBC(AdbcStatementExecuteQuery(function_data.statement.get(), nullptr,
-                                       nullptr, &error),
-             IOException);
+    // Execute the command
+    AdbcError error = {};
+    CHECK_ADBC(AdbcStatementExecuteQuery(function_data.statement.get(), nullptr, nullptr, &error), IOException);
 
-  // Mark as completed
-  function_data.finished = true;
+    // Mark as completed
+    function_data.finished = true;
 }
 
-unique_ptr<FunctionData>
-AdbcExecuteBindFunction(ClientContext &context, TableFunctionBindInput &input,
-                        vector<LogicalType> &return_types,
-                        vector<string> &names) {
+unique_ptr<FunctionData> AdbcExecuteBindFunction(ClientContext &context,
+                                                 TableFunctionBindInput &input,
+                                                 vector<LogicalType> &return_types,
+                                                 vector<string> &names) {
 
-  // Validate that the function was provided exactly two input parameters
-  if (input.inputs.size() != 2) {
-    throw BinderException("adbc_execute(...) requires two parameters: (1) the "
-                          "adbc URI (2) the SQL query string");
-  }
+    // Validate that the function was provided exactly two input parameters
+    if (input.inputs.size() != 2) {
+        throw BinderException("adbc_execute(...) requires two parameters: (1) the "
+                              "adbc URI (2) the SQL query string");
+    }
 
-  // Return type
-  return_types.emplace_back(LogicalTypeId::BOOLEAN);
-  names.emplace_back("Success");
+    // Return type
+    return_types.emplace_back(LogicalTypeId::BOOLEAN);
+    names.emplace_back("Success");
 
-  // Get the input parameters
-  auto uri = input.inputs[0].GetValue<string>();
-  auto query_text = input.inputs[1].GetValue<string>();
-  return make_uniq<AdbcExecuteFunctionData>(uri, query_text);
+    // Get the input parameters
+    auto uri = input.inputs[0].GetValue<string>();
+    auto query_text = input.inputs[1].GetValue<string>();
+    return make_uniq<AdbcExecuteFunctionData>(uri, query_text);
 }
 
 } // namespace adbc

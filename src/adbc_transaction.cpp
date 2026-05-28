@@ -3,77 +3,73 @@
 #include "duckdb/main/attached_database.hpp"
 
 // Calculate the buffer size based on the actual constants
-#define MAX_OPTION_LEN                                                         \
-  (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED)      \
-       ? sizeof(ADBC_OPTION_VALUE_ENABLED)                                     \
-       : sizeof(ADBC_OPTION_VALUE_DISABLED))
+#define MAX_OPTION_LEN                                                                                                 \
+    (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED) ? sizeof(ADBC_OPTION_VALUE_ENABLED)        \
+                                                                            : sizeof(ADBC_OPTION_VALUE_DISABLED))
 
 namespace duckdb {
 namespace adbc {
 
-AdbcTransaction::AdbcTransaction(TransactionManager &manager,
-                                 ClientContext &context)
-    : Transaction(manager, context) {}
-
-AdbcTransactionManager::AdbcTransactionManager(AttachedDatabase &db,
-                                               Catalog &catalog)
-    : TransactionManager(db), catalog(catalog) {}
-
-Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
-  // Ensure that auto-commit is enabled
-  auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-
-  // Ceate a buffer for the option value returned via ADBC
-  char option_value[MAX_OPTION_LEN] = {0};
-  size_t option_length = MAX_OPTION_LEN;
-  Private::AdbcError error = {};
-  CHECK_ADBC(AdbcConnectionGetOption(
-                 adbc_catalog.GetPooledConnection()->GetRawConnection(),
-                 ADBC_CONNECTION_OPTION_AUTOCOMMIT, option_value,
-                 &option_length, &error),
-             IOException);
-
-  bool auto_commit_enabled =
-      (strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0);
-
-  if (!auto_commit_enabled) {
-    throw NotImplementedException(
-        "Running with the auto-commit option turned off is not yet supported "
-        "with the ADBC extension");
-  }
-
-  // Create the transaction
-  auto transaction = make_uniq<AdbcTransaction>(*this, context);
-  auto &result = *transaction;
-  {
-    lock_guard<mutex> map_lock(map_mutex);
-    transactions[result] = move(transaction);
-  }
-  return result;
+AdbcTransaction::AdbcTransaction(TransactionManager &manager, ClientContext &context) : Transaction(manager, context) {
 }
 
-ErrorData AdbcTransactionManager::CommitTransaction(ClientContext &context,
-                                                    Transaction &transaction) {
-  // Remove the committed transaction and release the lock
-  lock_guard<mutex> map_lock(map_mutex);
-  transactions.erase(transaction);
-  return ErrorData();
+AdbcTransactionManager::AdbcTransactionManager(AttachedDatabase &db, Catalog &catalog)
+    : TransactionManager(db), catalog(catalog) {
+}
+
+Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
+    // Ensure that auto-commit is enabled
+    auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+
+    // Ceate a buffer for the option value returned via ADBC
+    char option_value[MAX_OPTION_LEN] = {0};
+    size_t option_length = MAX_OPTION_LEN;
+    Private::AdbcError error = {};
+    CHECK_ADBC(AdbcConnectionGetOption(adbc_catalog.GetPooledConnection()->GetRawConnection(),
+                                       ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+                                       option_value,
+                                       &option_length,
+                                       &error),
+               IOException);
+
+    bool auto_commit_enabled = (strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0);
+
+    if (!auto_commit_enabled) {
+        throw NotImplementedException("Running with the auto-commit option turned off is not yet supported "
+                                      "with the ADBC extension");
+    }
+
+    // Create the transaction
+    auto transaction = make_uniq<AdbcTransaction>(*this, context);
+    auto &result = *transaction;
+    {
+        lock_guard<mutex> map_lock(map_mutex);
+        transactions[result] = move(transaction);
+    }
+    return result;
+}
+
+ErrorData AdbcTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
+    // Remove the committed transaction and release the lock
+    lock_guard<mutex> map_lock(map_mutex);
+    transactions.erase(transaction);
+    return ErrorData();
 }
 
 void AdbcTransactionManager::RollbackTransaction(Transaction &transaction) {
-  // Remove the transaction we are rolling back and release the lock
-  lock_guard<mutex> map_lock(map_mutex);
-  transactions.erase(transaction);
+    // Remove the transaction we are rolling back and release the lock
+    lock_guard<mutex> map_lock(map_mutex);
+    transactions.erase(transaction);
 }
 
 void AdbcTransactionManager::Checkpoint(ClientContext &context, bool force) {
-  // No-op for checkpointing
+    // No-op for checkpointing
 }
 
-unique_ptr<TransactionManager>
-AdbcCreateTransactionManager(optional_ptr<StorageExtensionInfo> storage_info,
-                             AttachedDatabase &db, Catalog &catalog) {
-  return make_uniq<AdbcTransactionManager>(db, catalog);
+unique_ptr<TransactionManager> AdbcCreateTransactionManager(optional_ptr<StorageExtensionInfo> storage_info,
+                                                            AttachedDatabase &db,
+                                                            Catalog &catalog) {
+    return make_uniq<AdbcTransactionManager>(db, catalog);
 }
 
 } // namespace adbc

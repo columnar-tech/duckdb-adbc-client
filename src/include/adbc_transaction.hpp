@@ -12,25 +12,24 @@ namespace adbc {
 
 class AdbcTransaction : public Transaction {
 public:
-  AdbcTransaction(TransactionManager &manager, ClientContext &context);
-  ~AdbcTransaction() override = default;
+    AdbcTransaction(TransactionManager &manager, ClientContext &context);
+    ~AdbcTransaction() override = default;
 };
 
 class AdbcTransactionManager : public TransactionManager {
 public:
-  explicit AdbcTransactionManager(AttachedDatabase &db, Catalog &catalog);
-  ~AdbcTransactionManager() override = default;
+    explicit AdbcTransactionManager(AttachedDatabase &db, Catalog &catalog);
+    ~AdbcTransactionManager() override = default;
 
-  Transaction &StartTransaction(ClientContext &context) override;
-  ErrorData CommitTransaction(ClientContext &context,
-                              Transaction &transaction) override;
-  void RollbackTransaction(Transaction &transaction) override;
-  void Checkpoint(ClientContext &context, bool force = false) override;
+    Transaction &StartTransaction(ClientContext &context) override;
+    ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
+    void RollbackTransaction(Transaction &transaction) override;
+    void Checkpoint(ClientContext &context, bool force = false) override;
 
 private:
-  Catalog &catalog;
-  mutex map_mutex;
-  reference_map_t<Transaction, unique_ptr<Transaction>> transactions;
+    Catalog &catalog;
+    mutex map_mutex;
+    reference_map_t<Transaction, unique_ptr<Transaction>> transactions;
 };
 
 } // namespace adbc

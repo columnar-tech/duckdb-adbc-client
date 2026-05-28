@@ -5,8 +5,7 @@
 
 namespace duckdb {
 namespace adbc {
-void AdbcScanFunction(ClientContext &context, TableFunctionInput &data,
-                      DataChunk &output);
+void AdbcScanFunction(ClientContext &context, TableFunctionInput &data, DataChunk &output);
 unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
                                               TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types,
@@ -16,28 +15,26 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
 // ArrowArrayStreamWrapper instances
 class AdbcArrowStreamFactory {
 public:
-  // Create an ephemeral connection (i.e., read_adbc(...) is called directly)
-  AdbcArrowStreamFactory(const string &uri, const string &query_text);
-  // Use a connection from the catalog's pool (i.e., SELECT * FROM <adbc>)
-  AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection,
-                         const string &query_text);
-  AdbcStatement *GetStatement();
+    // Create an ephemeral connection (i.e., read_adbc(...) is called directly)
+    AdbcArrowStreamFactory(const string &uri, const string &query_text);
+    // Use a connection from the catalog's pool (i.e., SELECT * FROM <adbc>)
+    AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection, const string &query_text);
+    AdbcStatement *GetStatement();
 
 private:
-  unique_ptr<AdbcPooledConnection> connection;
-  Handle<Private::AdbcStatement> statement;
+    unique_ptr<AdbcPooledConnection> connection;
+    Handle<Private::AdbcStatement> statement;
 };
 
 // A wrapper class to take ownership of the factory object (and the
 // corresponding ADBC state) during the scan
 class AdbcArrowScanFunctionData : public ArrowScanFunctionData {
 public:
-  // Pass the factory and the factory function that creates an ArrowArrayStream
-  AdbcArrowScanFunctionData(ClientContext &context,
-                            unique_ptr<AdbcArrowStreamFactory> factory);
+    // Pass the factory and the factory function that creates an ArrowArrayStream
+    AdbcArrowScanFunctionData(ClientContext &context, unique_ptr<AdbcArrowStreamFactory> factory);
 
 private:
-  unique_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
+    unique_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
 };
 
 } // namespace adbc
