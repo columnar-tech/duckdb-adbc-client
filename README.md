@@ -162,7 +162,7 @@ D SELECT * FROM game_inventors;
 
 ### Custom Delimiters
 
-By default, `ATTACH` delimits all SQL queries with double quotes, i.e., `SELECT * FROM "schema"."table"`
+By default, `ATTACH` delimits all SQL queries with double quotes (i.e., `SELECT * FROM "schema"."table"`).
 
 The `DELIMITER` option adds support for systems with different schema/table delimiters (i.e., `[schema].[table]` for SQL Server).
 
