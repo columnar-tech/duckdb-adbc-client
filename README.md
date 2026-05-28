@@ -200,6 +200,12 @@ D INSERT INTO games (SELECT * FROM games);
 D 
 ```
 
+To materialize all input rows to the `INSERT` and prevent concurrency bugs when mixing ADBC reads and writes, you can set the `adbc_materialize_insert_rows` flag.
+
+```sql
+D SET adbc_materialize_insert_rows = true;
+```
+
 ## Tuning
 
 ### Connection Pool Size
