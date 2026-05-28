@@ -18,9 +18,11 @@ include_directories(arrow-adbc/c/vendor)
 
 # Sources
 set(EXTENSION_SOURCES
-    src/adbc_extension.cpp
-    src/adbc_connection_pool.cpp
     src/adbc_catalog.cpp
+    src/adbc_clear_cache.cpp
+    src/adbc_connection_pool.cpp
+    src/adbc_driver_manager.cpp
+    src/adbc_extension.cpp
     src/adbc_execute.cpp
     src/adbc_insert.cpp
     src/adbc_scan.cpp
@@ -28,7 +30,6 @@ set(EXTENSION_SOURCES
     src/adbc_storage.cpp
     src/adbc_table_entry.cpp
     src/adbc_transaction.cpp
-    src/adbc_driver_manager.cpp
 )
 
 # DuckDB API version

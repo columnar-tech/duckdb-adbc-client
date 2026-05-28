@@ -33,9 +33,6 @@ AdbcInsert::AdbcInsert(PhysicalPlan &physical_plan,
       column_names(names), table_name(table_name), schema_name(schema_name), pool(pool), insert_mode(mode) {
 }
 
-//===--------------------------------------------------------------------===//
-// States
-//===--------------------------------------------------------------------===//
 class AdbcInsertGlobalState : public GlobalSinkState {
 public:
     explicit AdbcInsertGlobalState(ClientContext &context,
@@ -50,8 +47,12 @@ public:
           table_name(table_name), schema_name(schema_name), insert_mode(insert_mode), collection(context, types),
           temporary_memory_state(TemporaryMemoryManager::Get(context).Register(context)) {
 
-        // Set the maximum number of chunks using the configuration setting
+        // Set whether we materialize insert rows
         Value option_value;
+        context.TryGetCurrentSetting("adbc_materialize_insert_rows", option_value);
+        materialize_input = option_value.GetValue<bool>();
+
+        // Set the maximum number of chunks using the configuration setting
         context.TryGetCurrentSetting("adbc_insert_batch_size", option_value);
         max_chunks = option_value.GetValue<int64_t>();
 
@@ -95,6 +96,9 @@ public:
     bool canceled = false;
     bool full = false;
     bool first_insert = true;
+
+    // Whether to materialize the entire input
+    bool materialize_input = false;
 
     // Batch size control
     int64_t max_chunks;
@@ -267,10 +271,6 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
     CHECK_STATUS(AdbcStatementExecuteQuery(statement.get(), nullptr, &gstate.rows_affected, &error));
 };
 
-//===--------------------------------------------------------------------===//
-// Sink
-//===--------------------------------------------------------------------===//
-
 SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {
     auto &gstate = input.global_state.Cast<AdbcInsertGlobalState>();
 
@@ -301,22 +301,22 @@ SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk, Ope
         gstate.insert_count += chunk.size();
         gstate.active_chunks += 1;
 
-        // Block on 50% memory usage or hitting the max chunk size
-        auto used_bytes = gstate.collection.SizeInBytes();
-        auto free_bytes = gstate.temporary_memory_state->GetReservation();
-        bool exhausted_memory = used_bytes >= 0.5 * free_bytes;
-        bool hit_chunk_limit = gstate.active_chunks >= gstate.max_chunks;
-        if (first_chunk || exhausted_memory || hit_chunk_limit) {
-            gstate.full = true;
+        // Consider blocking if the entire input doesn't have to be materialized
+        if (!gstate.materialize_input) {
+            // Block on 50% memory usage or hitting the max chunk size
+            auto used_bytes = gstate.collection.SizeInBytes();
+            auto free_bytes = gstate.temporary_memory_state->GetReservation();
+            bool exhausted_memory = used_bytes >= 0.5 * free_bytes;
+            bool hit_chunk_limit = gstate.active_chunks >= gstate.max_chunks;
+            if (first_chunk || exhausted_memory || hit_chunk_limit) {
+                gstate.full = true;
+            }
         }
     }
     gstate.consumer_cv.notify_one();
     return SinkResultType::NEED_MORE_INPUT;
 }
 
-//===--------------------------------------------------------------------===//
-// Finalize
-//===--------------------------------------------------------------------===//
 SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline,
                                       Event &event,
                                       ClientContext &context,
@@ -348,10 +348,6 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline,
     return SinkFinalizeType::READY;
 }
 
-//===--------------------------------------------------------------------===//
-// GetData
-//===--------------------------------------------------------------------===//
-//
 SourceResultType AdbcInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
     auto &gstate = sink_state->Cast<AdbcInsertGlobalState>();
     {
@@ -363,9 +359,6 @@ SourceResultType AdbcInsert::GetData(ExecutionContext &context, DataChunk &chunk
     return SourceResultType::FINISHED;
 }
 
-//===--------------------------------------------------------------------===//
-// Helpers
-//===--------------------------------------------------------------------===//
 string AdbcInsert::GetName() const {
     string operator_name;
     switch (insert_mode) {

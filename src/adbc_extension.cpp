@@ -34,14 +34,14 @@ static void LoadInternal(ExtensionLoader &loader) {
     read_adbc_function.filter_pushdown = false;
     loader.RegisterFunction(read_adbc_function);
 
-    // Construct an adbc_execute(uri, query) to perform DML via ADBC
+    // Construct an adbc_execute(uri, query) function to perform DML via ADBC
     TableFunction adbc_execute_function("adbc_execute",
                                         {LogicalType::VARCHAR, LogicalType::VARCHAR},
                                         adbc::AdbcExecuteFunction,
                                         adbc::AdbcExecuteBindFunction);
     loader.RegisterFunction(adbc_execute_function);
 
-    // Construct an adbc_execute(uri, query) to perform DML via ADBC
+    // Construct an adbc_clear_cache function to clear catalog metadata
     TableFunction adbc_clear_cache_function("adbc_clear_cache",
                                             {},
                                             adbc::AdbcClearCacheFunction,
@@ -57,6 +57,14 @@ static void LoadInternal(ExtensionLoader &loader) {
     config.AddExtensionOption("adbc_mix_reads_writes",
                               "Whether ADBC reads and writes can be mixed within "
                               "the same SQL statement (default false).",
+                              LogicalType::BOOLEAN,
+                              Value::BOOLEAN(false),
+                              nullptr,
+                              SetScope::SESSION);
+
+    // Create a custom knob to control whether ADBC inputs are fully materialized
+    config.AddExtensionOption("adbc_materialize_insert_rows",
+                              "Whether input rows for INSERTs are materialized before inserting via ADBC.",
                               LogicalType::BOOLEAN,
                               Value::BOOLEAN(false),
                               nullptr,
