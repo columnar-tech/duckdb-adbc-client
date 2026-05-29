@@ -41,6 +41,9 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "duckdb/common/arrow/arrow.hpp"
+#include "duckdb/common/arrow/arrow_converter.hpp"
+#include "duckdb/function/table/arrow.hpp"
 
 /// \defgroup Arrow C Data Interface
 /// Definitions for the C Data Interface/C Stream Interface.
@@ -54,6 +57,8 @@
 #ifdef __cplusplus
 extern "C++" {
 #endif
+
+namespace Private {
 
 // Extra guard for versions of Arrow without the canonical guard
 #ifndef ARROW_FLAG_DICTIONARY_ORDERED
@@ -1289,6 +1294,11 @@ AdbcStatusCode AdbcDatabaseGetOptionInt(struct AdbcDatabase *database,
 /// Options may be set before AdbcDatabaseInit.  Some drivers may
 /// support setting options after initialization as well.
 ///
+/// Driver managers may treat some option keys as manager-reserved and
+/// handle them without forwarding them to the underlying driver.  In
+/// particular, the option key "profile" is reserved for connection
+/// profiles and must not be implemented or interpreted by drivers.
+///
 /// \param[in] database The database.
 /// \param[in] key The option to set.
 /// \param[in] value The option value.
@@ -2430,3 +2440,4 @@ typedef AdbcStatusCode (*AdbcDriverInitFunc)(int version, void *driver, struct A
 #ifdef __cplusplus
 }
 #endif
+} // namespace Private

@@ -6,7 +6,7 @@
 #include "duckdb/common/mutex.hpp"
 
 // Check if an ADBC command went wrong, if it did then save the state and return
-#define CHECK_STATUS(EXPR)                                                                                             \
+#define CHECKPOINT_STATUS(EXPR)                                                                                        \
     do {                                                                                                               \
         Private::AdbcError error = {};                                                                                 \
         AdbcStatusCode status = (EXPR);                                                                                \
@@ -246,29 +246,29 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 
     // Create the ADBC statement to perform the insert
     Handle<Private::AdbcStatement> statement = {};
-    CHECK_STATUS(AdbcStatementNew(connection, statement.get(), &error));
+    CHECKPOINT_STATUS(AdbcStatementNew(connection, statement.get(), &error));
 
     // Set append mode only if we are doing an INSERT (not a CTAS)
     if (gstate.insert_mode == InsertMode::APPEND) {
-        CHECK_STATUS(
+        CHECKPOINT_STATUS(
             AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_MODE, ADBC_INGEST_OPTION_MODE_APPEND, &error));
     }
 
     // Set the schema name to perform the insert on
-    CHECK_STATUS(AdbcStatementSetOption(statement.get(),
-                                        ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
-                                        gstate.schema_name.c_str(),
-                                        &error));
+    CHECKPOINT_STATUS(AdbcStatementSetOption(statement.get(),
+                                             ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+                                             gstate.schema_name.c_str(),
+                                             &error));
 
     // Set the table name to perform the insert on
-    CHECK_STATUS(
+    CHECKPOINT_STATUS(
         AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_TARGET_TABLE, gstate.table_name.c_str(), &error));
 
     // Bind the stream to the statement
-    CHECK_STATUS(AdbcStatementBindStream(statement.get(), stream.get(), &error));
+    CHECKPOINT_STATUS(AdbcStatementBindStream(statement.get(), stream.get(), &error));
 
     // Execute the insert
-    CHECK_STATUS(AdbcStatementExecuteQuery(statement.get(), nullptr, &gstate.rows_affected, &error));
+    CHECKPOINT_STATUS(AdbcStatementExecuteQuery(statement.get(), nullptr, &gstate.rows_affected, &error));
 };
 
 SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

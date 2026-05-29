@@ -21,7 +21,6 @@ set(EXTENSION_SOURCES
     src/adbc_catalog.cpp
     src/adbc_clear_cache.cpp
     src/adbc_connection_pool.cpp
-    src/adbc_driver_manager.cpp
     src/adbc_extension.cpp
     src/adbc_execute.cpp
     src/adbc_insert.cpp
@@ -30,6 +29,11 @@ set(EXTENSION_SOURCES
     src/adbc_storage.cpp
     src/adbc_table_entry.cpp
     src/adbc_transaction.cpp
+    src/adbc-vendor/adbc_driver_manager.cpp
+    src/adbc-vendor/adbc_driver_manager_api.cpp
+    src/adbc-vendor/adbc_driver_manager_driver_loading.cpp
+    src/adbc-vendor/adbc_driver_manager_profiles.cpp
+    src/adbc-vendor/adbc_utils.cpp
 )
 
 # DuckDB API version
