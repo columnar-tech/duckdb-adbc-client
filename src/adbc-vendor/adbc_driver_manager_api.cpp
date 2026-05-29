@@ -25,16 +25,16 @@
 #include <unordered_map>
 #include <utility>
 
+#include "adbc-vendor/adbc_driver_manager_internal.h"
 #include "adbc-vendor/adbc.h"
 #include "adbc-vendor/adbc_driver_manager.h"
-#include "adbc-vendor/adbc_driver_manager_internal.h"
-
 namespace Private {
 
 // =============================================================================
 // Default stub implementations for error handling (declared here for use below)
 // =============================================================================
 
+namespace {
 // Default stubs for error handling (ADBC 1.1.0)
 int ErrorGetDetailCount(const struct AdbcError *error) {
     return 0;
@@ -47,15 +47,18 @@ struct AdbcErrorDetail ErrorGetDetail(const struct AdbcError *error, int index) 
 const struct AdbcError *ErrorFromArrayStream(struct ArrowArrayStream *stream, AdbcStatusCode *status) {
     return nullptr;
 }
+} // namespace
 
 // =============================================================================
 // ArrowArrayStream wrapper to support AdbcErrorFromArrayStream
 // =============================================================================
 
+namespace {
 struct ErrorArrayStream {
     struct ArrowArrayStream stream;
     struct AdbcDriver *private_driver;
 };
+} // namespace
 
 static void ErrorArrayStreamRelease(struct ArrowArrayStream *stream) {
     if (stream->release != ErrorArrayStreamRelease || !stream->private_data) return;
@@ -136,6 +139,7 @@ const struct AdbcError *AdbcErrorFromArrayStream(struct ArrowArrayStream *stream
 // Default stub implementations for driver functions
 // =============================================================================
 
+namespace {
 AdbcStatusCode DatabaseGetOption(struct AdbcDatabase *database,
                                  const char *key,
                                  char *value,
@@ -465,6 +469,7 @@ AdbcStatusCode StatementSetSubstraitPlan(struct AdbcStatement *, const uint8_t *
     SetError(error, "AdbcStatementSetSubstraitPlan not implemented");
     return ADBC_STATUS_NOT_IMPLEMENTED;
 }
+} // namespace
 
 // =============================================================================
 // Database API
@@ -1653,4 +1658,5 @@ AdbcStatusCode AdbcLoadDriverFromInitFunc(AdbcDriverInitFunc init_func,
 #undef FILL_DEFAULT
 #undef CHECK_REQUIRED
 }
+
 } // namespace Private

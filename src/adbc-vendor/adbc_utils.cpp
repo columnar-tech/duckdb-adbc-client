@@ -15,7 +15,7 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#include "adbc-vendor/utils.h"
+#include "adbc-vendor/adbc_utils.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "adbc-vendor/adbc.h"
 namespace Private {
 
 static size_t kErrorBufferSize = 1024;
@@ -941,4 +942,5 @@ struct AdbcGetObjectsConstraint *InternalAdbcGetObjectsDataGetConstraintByName(
 
     return NULL;
 }
+
 } // namespace Private

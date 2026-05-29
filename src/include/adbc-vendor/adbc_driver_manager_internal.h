@@ -32,9 +32,9 @@
 
 #include "adbc-vendor/adbc.h"
 #include "adbc-vendor/adbc_driver_manager.h"
+namespace Private {
 
 // Forward declarations and shared utilities for driver manager implementation
-namespace Private {
 
 // Enums
 enum class SearchPathSource {
@@ -270,4 +270,5 @@ inline const wchar_t *kAdbcDriverPath = L"ADBC_DRIVER_PATH";
 #else
 inline const char *kAdbcDriverPath = "ADBC_DRIVER_PATH";
 #endif // _WIN32
+
 } // namespace Private

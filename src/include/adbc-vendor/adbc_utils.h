@@ -22,15 +22,13 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "duckdb/common/arrow/arrow.hpp"
 #include "adbc-vendor/adbc.h"
 #include "nanoarrow/nanoarrow.h"
+namespace Private {
 
 #ifdef __cplusplus
-extern "C" {
+extern "C++" {
 #endif
-
-namespace Private {
 
 int InternalAdbcStatusCodeToErrno(AdbcStatusCode code);
 
@@ -261,4 +259,5 @@ struct AdbcGetObjectsConstraint *InternalAdbcGetObjectsDataGetConstraintByName(
 #ifdef __cplusplus
 }
 #endif
-}
+
+} // namespace Private

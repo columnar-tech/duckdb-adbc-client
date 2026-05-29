@@ -3,7 +3,7 @@
 #include "adbc-vendor/adbc.h"
 #include "adbc-vendor/adbc_driver_manager.h"
 #include "adbc-vendor/adbc_driver_manager_internal.h"
-#include "adbc-vendor/utils.h"
+#include "adbc-vendor/adbc_utils.h"
 #include "duckdb/common/arrow/arrow_converter.hpp"
 #include "duckdb/function/table/arrow.hpp"
 #include "duckdb/common/exception/binder_exception.hpp"

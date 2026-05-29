@@ -24,12 +24,11 @@
 
 #include "adbc-vendor/adbc.h"
 #include <stdint.h>
+namespace Private {
 
 #ifdef __cplusplus
 extern "C++" {
 #endif
-
-namespace Private {
 
 #ifndef ADBC_DRIVER_MANAGER_H
 #define ADBC_DRIVER_MANAGER_H
@@ -379,4 +378,5 @@ AdbcStatusCode AdbcProfileProviderFilesystem(const char *profile_name,
 #ifdef __cplusplus
 }
 #endif
+
 } // namespace Private

@@ -36,7 +36,7 @@
 #include "adbc-vendor/adbc_driver_manager_internal.h"
 #include "adbc-vendor/adbc.h"
 #include "adbc-vendor/adbc_driver_manager.h"
-#include "current_arch.h"
+#include "adbc-vendor/adbc_current_arch.h"
 
 #include <algorithm>
 #include <array>
@@ -52,8 +52,8 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
 namespace Private {
+
 using namespace std::string_literals; // NOLINT [build/namespaces]
 
 // NOTE: Error handling, structures, and helper functions are now in internal header
@@ -423,7 +423,7 @@ struct ProfileGuard {
 
 ADBC_EXPORT
 AdbcStatusCode InternalAdbcParseOptions(TempDatabase *db, struct AdbcError *error) {
-    // https://github.com/apache/adbc-vendor/issues/4085
+    // https://github.com/apache/arrow-adbc/issues/4085
 
     // init_func always takes precedence
     if (db->init_func) return ADBC_STATUS_OK;
@@ -664,4 +664,5 @@ AdbcStatusCode AdbcFindLoadDriver(const char *driver_name,
     }
     return status;
 }
+
 } // namespace Private

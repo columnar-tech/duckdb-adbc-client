@@ -42,8 +42,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "duckdb/common/arrow/arrow.hpp"
-#include "duckdb/common/arrow/arrow_converter.hpp"
-#include "duckdb/function/table/arrow.hpp"
+namespace Private {
 
 /// \defgroup Arrow C Data Interface
 /// Definitions for the C Data Interface/C Stream Interface.
@@ -57,8 +56,6 @@
 #ifdef __cplusplus
 extern "C++" {
 #endif
-
-namespace Private {
 
 // Extra guard for versions of Arrow without the canonical guard
 #ifndef ARROW_FLAG_DICTIONARY_ORDERED
@@ -2440,4 +2437,5 @@ typedef AdbcStatusCode (*AdbcDriverInitFunc)(int version, void *driver, struct A
 #ifdef __cplusplus
 }
 #endif
+
 } // namespace Private
