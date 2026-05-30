@@ -38,6 +38,7 @@ done
 # Inject DuckDB Arrow header in adbc.h
 sed -i 's|namespace Private {|#include "duckdb\/common\/arrow\/arrow.hpp"\nnamespace Private {|g' $VENDOR_HEADER_PATH/adbc.h
 
+# Vendor the current_arch header
 cp $DRIVER_MANAGER_PATH/current_arch.h $VENDOR_HEADER_PATH/adbc_current_arch.h
 
 # Copy the driver manager implementation files
