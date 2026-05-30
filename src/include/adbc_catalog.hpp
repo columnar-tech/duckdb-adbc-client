@@ -23,6 +23,8 @@ public:
               context.TryGetCurrentSetting("adbc_connection_pool_size", option_value);
               return option_value.GetValue<int64_t>();
           }())) {
+        // Create a connection just to test that the URI is valid
+        pool->GetConnection();
     }
 
     unique_lock<std::recursive_mutex> AcquireScopedLock() {
