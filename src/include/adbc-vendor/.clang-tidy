@@ -1,2 +1,3 @@
+InheritParentConfig: false
 Checks: '-*,clang-diagnostic-*'
 WarningsAsErrors: ''
