@@ -131,15 +131,16 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
 
     // If there are ADBC reads and we cannot mix reads and writes
     if (ContainsAdbcReads(plan) && !can_mix_reads_writes) {
-        throw NotImplementedException("This CREATE TABLE AS (SELECT ...) statement mixes ADBC reads and writes, which may cause "
-                                      "concurrency issues "
-                                      "depending on the underlying DBMS's transaction isolation level.\n"
-                                      "If the reads and writes target different DBMSs, this is likely "
-                                      "safe; "
-                                      "if they target the same DBMS, consistency depends on that "
-                                      "DBMS's isolation guarantees.\n"
-                                      "If you believe this CREATE TABLE is safe, turn off this check by running "
-                                      "\"SET adbc_mix_reads_writes = true;\"");
+        throw NotImplementedException(
+            "This CREATE TABLE AS (SELECT ...) statement mixes ADBC reads and writes, which may cause "
+            "concurrency issues "
+            "depending on the underlying DBMS's transaction isolation level.\n"
+            "If the reads and writes target different DBMSs, this is likely "
+            "safe; "
+            "if they target the same DBMS, consistency depends on that "
+            "DBMS's isolation guarantees.\n"
+            "If you believe this CREATE TABLE is safe, turn off this check by running "
+            "\"SET adbc_mix_reads_writes = true;\"");
     }
 
     // Collect column names & types
