@@ -94,7 +94,7 @@ move "postgresql.toml" "%LOCALAPPDATA%\ADBC\Profiles\"
 
 ### read_adbc
 
-To read data through ADBC you can call the `read_adbc` table function by providing a URI to the connection profile and a SQL query. 
+To read data through ADBC you can call the `read_adbc` table function by providing a URI to a connection profile and a SQL query. 
 
 ```sql
 D SELECT * FROM read_adbc('profile://postgresql', 'SELECT * FROM games');
@@ -112,7 +112,7 @@ D SELECT * FROM read_adbc('profile://postgresql', 'SELECT * FROM games');
 
 ### adbc_execute
 
-To perform arbitrarys statements on the database ADBC, you can call `adbc_execute`.
+To perform arbitrary operations via ADBC, you can call `adbc_execute`.
 
 ```sql
 D CALL adbc_execute('profile://postgresql', 'DROP TABLE public.games');
