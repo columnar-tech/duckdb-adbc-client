@@ -199,7 +199,13 @@ D CALL adbc_clear_cache();
 └─────────┘
 ```
 
-## Advanced Features
+## Limitations
+
+### Concurrency Within a Single Process
+
+The ADBC extension does not currently support concurrent ADBC operations within a single process.
+
+### Concurrency Within a Single SQL Statement
 
 By default, mixing ADBC reads and writes in the same SQL statement will throw an error to prevent potential concurrency bugs. To override this warning and enable mixing ADBC reads and writes, you can set `adbc_mix_reads_writes` to `true`.
 
