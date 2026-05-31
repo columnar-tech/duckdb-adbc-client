@@ -17,7 +17,7 @@ To avoid redundant requests to the remote ADBC database, the catalog performs ca
 
 To avoid materializing the entire set of input rows to an `INSERT` or `CTAS` statement at once, the ADBC extension inserts batches of rows at a time. 
 During query execution, a single DuckDB thread appends DuckDB chunks of 2048 rows into an in-memory buffer (single-producer single-consumer queue).
-The buffer is full when it occupies 50% of available temporary memory, or it holds `abdc_insert_batch_size` chunks.
+The buffer is full when it occupies 50% of available temporary memory, or it holds `abdc_insert_buffer_size` chunks.
 When the buffer is full, the DuckDB thread signals the consuming insert thread to consume the buffer.
 The insert thread consumes chunks from the in-memory buffer, converts them to Arrow format, and bulk-inserts them via ADBC.
 After emptying the buffer, the insert thread signals back to DuckDB to append more chunks or exits if there is more data left to insert.

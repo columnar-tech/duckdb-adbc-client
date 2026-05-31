@@ -72,14 +72,14 @@ static void LoadInternal(ExtensionLoader &loader) {
 
     // Create a custom knob to control the buffer size for inserts
     config.AddExtensionOption(
-        "adbc_insert_batch_size",
+        "adbc_insert_buffer_size",
         "The number of chunks (default 1000) to buffer in memory before "
         "inserting via ADBC.",
         LogicalType::BIGINT,
         Value::BIGINT(1000),
         [](ClientContext &context, SetScope scope, Value &parameter) {
             if (parameter.GetValue<int64_t>() <= 0) {
-                throw InvalidInputException("adbc_insert_batch_size must be greater than zero!");
+                throw InvalidInputException("adbc_insert_buffer_size must be greater than zero!");
             }
         },
         SetScope::SESSION);

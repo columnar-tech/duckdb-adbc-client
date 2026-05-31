@@ -53,7 +53,7 @@ public:
         materialize_input = option_value.GetValue<bool>();
 
         // Set the maximum number of chunks using the configuration setting
-        context.TryGetCurrentSetting("adbc_insert_batch_size", option_value);
+        context.TryGetCurrentSetting("adbc_insert_buffer_size", option_value);
         max_chunks = option_value.GetValue<int64_t>();
 
         // Track the maximum amount of available memory we have

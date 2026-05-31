@@ -227,10 +227,10 @@ Internally, the ADBC extension creates connections to perform SQL statements. To
 D SET adbc_connection_pool_size = 100;
 ```
 
-### INSERT and CTAS Batch Sizes
+### INSERT and CTAS Buffer Sizes
 
-When performing `INSERT` and `CREATE TABLE AS (SELECT ...)` statements, the extension uses ADBC's bulk ingest API. To avoid materializing all input rows at once, the ADBC extension inserts a batch of rows at a time. Internally, one thread appends rows to an in-memory buffer, and then another thread empties the buffer and inserts via ADBC. Increasing the batch size may improve performance, but slow down query cancellation. The batch is full when it exceeds 50% of the available memory or contains `adbc_insert_batch_size` chunks of 2048 rows each. The default value of `adbc_insert_batch_size` is 1000, resulting in a batch size of 1000 x 2048 rows (i.e., ~2M rows). To adjust the batch size, you can modify the value of `adbc_insert_batch_size`.
+When performing `INSERT` and `CREATE TABLE AS (SELECT ...)` statements, the extension uses ADBC's bulk ingest API. To avoid materializing all input rows at once, the ADBC extension inserts batches of rows at a time. Internally, one thread appends rows to an in-memory buffer, and then another thread empties the buffer and inserts via ADBC. Increasing the buffer size may improve performance, but slow down query cancellation. The buffer is full when it exceeds 50% of the available memory or contains `adbc_insert_batch_size` chunks of 2048 rows each. The default value of `adbc_insert_buffer_size` is 1000, resulting in a buffer of 1000 x 2048 rows (i.e., ~2M rows). To adjust the insert buffer size, you can modify the value of `adbc_insert_buffer_size`.
 
 ```sql
-D SET adbc_insert_batch_size = 10000;
+D SET adbc_insert_buffer_size = 10000;
 ```
