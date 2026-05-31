@@ -110,7 +110,7 @@ D SELECT * FROM read_adbc('profile://postgresql', 'SELECT * FROM games');
 
 ### adbc_execute
 
-To perform any statement through ADBC, you can call the `adbc_execute` function with the same parameters.
+To perform arbitrarys statements on the database ADBC, you can call `adbc_execute`.
 
 ```sql
 D CALL adbc_execute('profile://postgresql', 'DROP TABLE public.games');
@@ -199,7 +199,7 @@ D CALL adbc_clear_cache();
 
 ## Advanced Features
 
-By default, mixing ADBC reads and writes in the same SQL statement will throw an error to prevent potential concurrency bugs. To enable mixing ADBC reads and writes, you can set the `adbc_mix_reads_writes` flag to `true`.
+By default, mixing ADBC reads and writes in the same SQL statement will throw an error to prevent potential concurrency bugs. To override this warning and enable mixing ADBC reads and writes, you can set `adbc_mix_reads_writes` to `true`.
 
 ```sql
 D INSERT INTO games (SELECT * FROM games);
@@ -209,7 +209,7 @@ D INSERT INTO games (SELECT * FROM games);
 D 
 ```
 
-To materialize all input rows to the `INSERT` and prevent concurrency bugs when mixing ADBC reads and writes, you can set the `adbc_materialize_insert_rows` flag to `true`.
+To materialize all input rows to the `INSERT` and prevent concurrency bugs when mixing ADBC reads and writes, you can set `adbc_materialize_insert_rows` to `true`.
 
 ```sql
 D SET adbc_materialize_insert_rows = true;
