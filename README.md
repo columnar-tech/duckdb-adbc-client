@@ -209,7 +209,7 @@ D INSERT INTO games (SELECT * FROM games);
 D 
 ```
 
-To materialize all input rows to the `INSERT` and prevent concurrency bugs when mixing ADBC reads and writes, you can set `adbc_materialize_insert_rows` to `true`.
+To materialize all input rows to an `INSERT` or `CTAS` and prevent concurrency bugs when mixing ADBC reads and writes, you can set `adbc_materialize_insert_rows` to `true`.
 
 ```sql
 D SET adbc_materialize_insert_rows = true;
