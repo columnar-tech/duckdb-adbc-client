@@ -217,6 +217,8 @@ D SET adbc_materialize_insert_rows = true;
 
 ## Tuning
 
+To learn more about the internal design of the ADBC extension for tuning, you can read [DESIGN.md](./DESIGN.md).
+
 ### Connection Pool Size
 
 Internally, the ADBC extension creates connections to perform SQL statements. To avoid repeatedly creating and destroying connections, each attached ADBC database maintains a connection pool. The pool is initially empty and grows as SQL statements create new connections, up to a default limit of 50. Once the pool is full, SQL statements create ephemeral connections, that are destroyed immediately after execution. To adjust the ADBC connection pool limit for each attached database, you can modify the value of `adbc_connection_pool_size`.
