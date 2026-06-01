@@ -21,47 +21,52 @@ INSTALL adbc FROM community;
 LOAD adbc;
 ```
 
-If you prefer to build from source, you can install `cmake` and `ninja` and run:
-
-```sh
-# Clone the repo and its dependencies
-git clone --recurse-submodules git@github.com:columnar-tech/duckdb-adbc-client.git
-cd duckdb-adbc-client
-# Build the extension from source
-GEN=ninja make release
-# Build DuckDB from source
-cd duckdb
-GEN=ninja make release
-# Run DuckDB in unsigned mode to load untrusted extensions
-./build/release/duckdb -unsigned
-```
-
-You can then load the extension by running:
-
-```sql
-LOAD './build/release/adbc/adbc.duckdb_extension'
-```
+<details>
+  <summary>Click here for instructions on how to build the extension from source with cmake and ninja.</summary>
+  
+  ```sh
+  # Clone the repo and its dependencies
+  git clone --recurse-submodules git@github.com:columnar-tech/duckdb-adbc-client.git
+  cd duckdb-adbc-client
+  # Build the extension from source
+  GEN=ninja make release
+  # Build DuckDB from source
+  cd duckdb
+  GEN=ninja make release
+  # Run DuckDB in unsigned mode to load untrusted extensions
+  ./build/release/duckdb -unsigned
+  ```
+  
+  ```sql
+  LOAD './build/release/adbc/adbc.duckdb_extension'
+  ```
+  
+</details>
 
 ## Installing ADBC Drivers
 
 [`dbc`](https://columnar.tech/dbc/) is a command-line tool that makes it easy to install and manage ADBC drivers. 
 
-You can install `dbc` by running one of the commands below:
+<details>
+  <summary>Click here for instructions on how to install dbc..</summary>
+  
+  ```sh
+  # shell
+  curl -LsSf https://dbc.columnar.tech/install.sh | sh
+  # brew
+  brew install columnar-tech/tap/dbc
+  # uv
+  uv tool install dbc
+  # pipx
+  pipx install dbc
+  # powershell
+  powershell -ExecutionPolicy ByPass -c irm https://dbc.columnar.tech/install.ps1 | iex
+  # winget
+  winget install dbc
+  ```
+</details>
 
-```sh
-# shell
-curl -LsSf https://dbc.columnar.tech/install.sh | sh
-# brew
-brew install columnar-tech/tap/dbc
-# uv
-uv tool install dbc
-# pipx
-pipx install dbc
-# powershell
-powershell -ExecutionPolicy ByPass -c irm https://dbc.columnar.tech/install.ps1 | iex
-# winget
-winget install dbc
-```
+
 
 After installing `dbc`, you can run `dbc install <system>` to install a driver for a new system.
 
