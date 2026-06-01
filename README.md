@@ -1,8 +1,8 @@
 # DuckDB ADBC Extension
 
-![overall](./design/overall.png)
-
 Use DuckDB (v1.4 or later) to query [Snowflake](https://www.snowflake.com), [Databricks](https://www.databricks.com), [BigQuery](https://cloud.google.com/bigquery), [PostgreSQL](https://www.postgresql.org), [MySQL](https://www.mysql.com), or any other system  with an [ADBC driver](https://columnar.tech/dbc).
+
+![overall](./design/overall.png)
 
 ## What is ADBC?
 
