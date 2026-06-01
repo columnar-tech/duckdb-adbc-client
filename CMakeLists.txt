@@ -34,6 +34,7 @@ set(EXTENSION_SOURCES
     src/adbc-vendor/adbc_driver_manager_driver_loading.cpp
     src/adbc-vendor/adbc_driver_manager_profiles.cpp
     src/adbc-vendor/adbc_utils.cpp
+    src/adbc-vendor/nanoarrow.cpp
 )
 
 # DuckDB API version

@@ -47,7 +47,9 @@ cp $DRIVER_MANAGER_PATH/adbc_driver_manager.cc $VENDOR_IMPL_PATH/adbc_driver_man
 cp $DRIVER_MANAGER_PATH/adbc_driver_manager_api.cc $VENDOR_IMPL_PATH/adbc_driver_manager_api.cpp
 cp $DRIVER_MANAGER_PATH/adbc_driver_manager_driver_loading.cc $VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp
 cp $DRIVER_MANAGER_PATH/adbc_driver_manager_profiles.cc $VENDOR_IMPL_PATH/adbc_driver_manager_profiles.cpp
+cp ./arrow-adbc/c/vendor/nanoarrow/nanoarrow.c $VENDOR_IMPL_PATH/nanoarrow.cpp
 
+sed -i 's/nanoarrow.h/nanoarrow\/nanoarrow.h/g' $VENDOR_IMPL_PATH/nanoarrow.cpp
 # Fix struct return pattern for Windows CI
 sed -i 's/(struct AdbcErrorDetail){/AdbcErrorDetail{/g' $VENDOR_IMPL_PATH/adbc_utils.cpp
 
