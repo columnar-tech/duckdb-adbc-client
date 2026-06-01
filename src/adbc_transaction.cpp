@@ -61,7 +61,7 @@ Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
     auto &result = *transaction;
     {
         lock_guard<mutex> map_lock(map_mutex);
-        transactions[result] = move(transaction);
+        transactions[result] = std::move(transaction);
     }
     return result;
 }
