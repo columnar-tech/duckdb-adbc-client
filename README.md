@@ -38,8 +38,8 @@ LOAD adbc;
   ```
   
   ```sql
-  LOAD './build/release/adbc/adbc.duckdb_extension'
-  ```
+LOAD '../build/release/extension/adbc/adbc.duckdb_extension';
+```
   
 </details>
 
