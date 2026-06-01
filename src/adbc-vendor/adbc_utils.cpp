@@ -224,13 +224,13 @@ int InternalAdbcCommonErrorGetDetailCount(const struct AdbcError *error) {
 
 struct AdbcErrorDetail InternalAdbcCommonErrorGetDetail(const struct AdbcError *error, int index) {
     if (error->release != ReleaseErrorWithDetails) {
-        return (struct AdbcErrorDetail){NULL, NULL, 0};
+        return AdbcErrorDetail{NULL, NULL, 0};
     }
     struct AdbcErrorDetails *details = (struct AdbcErrorDetails *)error->private_data;
     if (index < 0 || index >= details->count) {
-        return (struct AdbcErrorDetail){NULL, NULL, 0};
+        return AdbcErrorDetail{NULL, NULL, 0};
     }
-    return (struct AdbcErrorDetail){
+    return AdbcErrorDetail{
         .key = details->keys[index],
         .value = details->values[index],
         .value_length = details->lengths[index],

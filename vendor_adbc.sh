@@ -48,6 +48,9 @@ cp $DRIVER_MANAGER_PATH/adbc_driver_manager_api.cc $VENDOR_IMPL_PATH/adbc_driver
 cp $DRIVER_MANAGER_PATH/adbc_driver_manager_driver_loading.cc $VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp
 cp $DRIVER_MANAGER_PATH/adbc_driver_manager_profiles.cc $VENDOR_IMPL_PATH/adbc_driver_manager_profiles.cpp
 
+# Fix struct return pattern for Windows CI
+sed -i 's/(struct AdbcErrorDetail){/AdbcErrorDetail{/g' $VENDOR_IMPL_PATH/adbc_utils.cpp
+
 # Rename utils.h to adbc_utils.h
 find "$VENDOR_IMPL_PATH" -type f -name "*.cpp" -exec sed -i 's/utils\.h/adbc_utils\.h/g' {} +
 # Rename current_arch.h to adbc_current_arch.h
