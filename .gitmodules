@@ -5,3 +5,6 @@
 [submodule "arrow-adbc"]
 	path = arrow-adbc
 	url = https://github.com/apache/arrow-adbc.git
+[submodule "extension-ci-tools"]
+	path = extension-ci-tools
+	url = https://github.com/columnar-tech/extension-ci-tools
