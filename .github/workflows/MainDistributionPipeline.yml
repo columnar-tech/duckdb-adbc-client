@@ -16,15 +16,15 @@ jobs:
     name: Build extension binaries
     uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4.4
     with:
-      duckdb_version: v1.4.0
-      ci_tools_version: v1.4.0
+      duckdb_version: v1.4.1
+      ci_tools_version: v1.4.4
       extension_name: adbc
 
   code-quality-check:
     name: Code Quality Check
     uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.4.4
     with:
-      duckdb_version: v1.4.0
-      ci_tools_version: v1.4.0
+      duckdb_version: v1.4.1
+      ci_tools_version: v1.4.4
       extension_name: adbc
       format_checks: 'format;tidy'
