@@ -2,15 +2,15 @@
 
 ![overall](./design/overall.png)
 
-Use DuckDB (v1.4 or later) to query [Snowflake](https://www.snowflake.com), [Databricks](https://www.databricks.com), [BigQuery](https://cloud.google.com/bigquery), [PostgreSQL](https://www.postgresql.org), [MySQL](https://www.mysql.com), or any other system  with an [ADBC driver](https://columnar.tech/dbc)!
+Use DuckDB (v1.4 or later) to query [Snowflake](https://www.snowflake.com), [Databricks](https://www.databricks.com), [BigQuery](https://cloud.google.com/bigquery), [PostgreSQL](https://www.postgresql.org), [MySQL](https://www.mysql.com), or any other system  with an [ADBC driver](https://columnar.tech/dbc).
 
 ## What is ADBC?
 
 ADBC (Arrow Database Connectivity) is a universal data-access API built on [Apache Arrow](https://arrow.apache.org/), an efficient, columnar data format that almost [every data system](https://arrow.apache.org/powered_by/) supports natively. 
 
 By building on Arrow, ADBC enables:
-1. Lightning fast (zero-copy) data transfer between column-oriented analytical systems, bypassing the slow column-to-row and row-to-column conversions typical of legacy row-based APIs like ODBC or JDBC.
-2. Seamless interoperability with a large and growing ecosystem of Arrow-compatible data systems.
+1. Lightning fast (zero-copy) data transfer between column-oriented analytical databases, bypassing the slow column-to-row and row-to-column conversions typical of legacy row-based APIs like ODBC or JDBC.
+2. Seamless interoperability with a large and growing ecosystem of Arrow-compatible systems.
 
 ## Extension Installation
 
