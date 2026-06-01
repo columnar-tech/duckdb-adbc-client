@@ -54,6 +54,7 @@ namespace Private {
 //! @cond Doxygen_Suppress
 
 #ifdef __cplusplus
+#define ADBC_EXPORT
 extern "C++" {
 #endif
 

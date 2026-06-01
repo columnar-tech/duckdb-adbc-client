@@ -16,7 +16,7 @@ cp $ADBC_HEADER_PATH/adbc_driver_manager.h $VENDOR_HEADER_PATH/adbc_driver_manag
 cp $DRIVER_MANAGER_PATH/adbc_driver_manager_internal.h $VENDOR_HEADER_PATH/adbc_driver_manager_internal.h
 
 # Change extern C to extern C++ and inject DuckDB arrow includes
-find "$VENDOR_HEADER_PATH" -type f -name "*.h" -exec sed -i 's/extern "C"[[:space:]]*{/extern "C++" {/g' {} +
+find "$VENDOR_HEADER_PATH" -type f -name "*.h" -exec sed -i 's/extern "C"[[:space:]]*{/#define ADBC_EXPORT\nextern "C++" {/g' {} +
 
 # Move includes with adbc_ into arrow-adbc
 find "$VENDOR_HEADER_PATH" -type f -name "*.h" -exec sed -i 's/#include "adbc_/#include "arrow-adbc\/adbc_/g' {} +

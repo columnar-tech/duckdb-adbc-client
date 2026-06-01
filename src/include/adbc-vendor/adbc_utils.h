@@ -27,6 +27,7 @@
 namespace Private {
 
 #ifdef __cplusplus
+#define ADBC_EXPORT
 extern "C++" {
 #endif
 
