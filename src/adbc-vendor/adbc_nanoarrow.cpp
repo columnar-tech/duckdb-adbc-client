@@ -22,7 +22,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow/nanoarrow.h"
+#include "adbc-vendor/adbc_nanoarrow.h"
 
 const char *ArrowNanoarrowVersion(void) {
     return NANOARROW_VERSION;
@@ -589,7 +589,7 @@ ArrowErrorCode ArrowDecimalAppendStringToBuffer(const struct ArrowDecimal *decim
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow/nanoarrow.h"
+#include "adbc-vendor/adbc_nanoarrow.h"
 
 static void ArrowSchemaReleaseInternal(struct ArrowSchema *schema) {
     if (schema->format != NULL) ArrowFree((void *)schema->format);
@@ -2273,7 +2273,7 @@ ArrowErrorCode ArrowMetadataBuilderRemove(struct ArrowBuffer *buffer, struct Arr
 #include <stdlib.h>
 #include <string.h>
 
-#include "nanoarrow/nanoarrow.h"
+#include "adbc-vendor/adbc_nanoarrow.h"
 
 static void ArrowArrayReleaseInternal(struct ArrowArray *array) {
     // Release buffers held by this array
@@ -3878,8 +3878,7 @@ ArrowErrorCode ArrowArrayViewCompare(const struct ArrowArrayView *actual,
 
 #include <errno.h>
 
-#include "nanoarrow/nanoarrow.h"
-namespace Private {
+#include "adbc-vendor/adbc_nanoarrow.h"
 
 struct BasicArrayStreamPrivate {
     struct ArrowSchema schema;
@@ -4003,5 +4002,3 @@ ArrowErrorCode ArrowBasicArrayStreamValidate(const struct ArrowArrayStream *arra
     ArrowArrayViewReset(&array_view);
     return NANOARROW_OK;
 }
-
-} // namespace Private

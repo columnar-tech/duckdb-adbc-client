@@ -23,7 +23,7 @@
 #include <string.h>
 
 #include "adbc-vendor/adbc.h"
-#include "nanoarrow/nanoarrow.h"
+#include "adbc-vendor/adbc_nanoarrow.h"
 namespace Private {
 
 #ifdef __cplusplus
