@@ -54,6 +54,9 @@ public:
 
 private:
     unique_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
+
+public:
+    optional_idx cardinality;
 };
 
 } // namespace adbc
