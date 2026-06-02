@@ -37,10 +37,12 @@ public:
     // Use a connection from the catalog's pool (i.e., SELECT * FROM <adbc>)
     AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection, const string &query_text);
     AdbcStatement *GetStatement();
+    void ResetStatement();
 
 private:
     unique_ptr<AdbcPooledConnection> connection;
     Handle<Private::AdbcStatement> statement;
+    string query_text;
 };
 
 // A wrapper class to take ownership of the factory object (and the

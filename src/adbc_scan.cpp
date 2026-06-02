@@ -18,24 +18,30 @@
 #include "adbc_scan.hpp"
 #include "adbc_util.hpp"
 #include "duckdb/main/config.hpp"
-
 namespace duckdb {
 namespace adbc {
 
 using namespace Private;
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri, const string &query_text)
-    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), statement() {
+    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), statement(), query_text(query_text) {
     connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> conn, const string &query_text)
-    : connection(std::move(conn)), statement() {
+    : connection(std::move(conn)), statement(), query_text(query_text) {
     connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
 AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
     return statement.get();
+}
+
+void AdbcArrowStreamFactory::ResetStatement() {
+    // Reset the statement object
+    statement = {};
+    // Reinitialize it
+    connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
 unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
@@ -63,7 +69,21 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
     AdbcError error = {};
     auto *statement = adbc_arrow_stream_factory->GetStatement();
     auto *schema = reinterpret_cast<ArrowSchema *>(&schema_root.arrow_schema);
-    CHECK_ADBC(AdbcStatementExecuteSchema(statement, schema, &error), BinderException);
+
+    // Try running ExecuteSchema(...)
+    auto status = AdbcStatementExecuteSchema(statement, schema, &error);
+
+    // If it's not available, then execute the query, get the schema, and cancel the query
+    if (status == ADBC_STATUS_NOT_IMPLEMENTED) {
+        Handle<ArrowArrayStream> stream = {};
+        int64_t rows_affected = 0;
+        CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, &error), BinderException);
+        stream->get_schema(stream.get(), schema);
+        CHECK_ADBC(AdbcStatementCancel(statement, &error), BinderException);
+        adbc_arrow_stream_factory->ResetStatement();
+    } else {
+        CHECK_ADBC(status, BinderException);
+    }
     ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table, schema_root.arrow_schema);
 }
 
