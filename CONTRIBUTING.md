@@ -24,7 +24,7 @@ GEN=ninja make release
 You can then load the extension by running:
 
 ```sql
-LOAD './build/release/adbc/adbc.duckdb_extension'
+LOAD '../build/release/extension/adbc/adbc.duckdb_extension';
 ```
 
 ## Vendoring ADBC

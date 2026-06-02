@@ -1,16 +1,16 @@
 # DuckDB ADBC Extension
 
-![overall](./design/overall.png)
+Use DuckDB (v1.4 or later) to query [Snowflake](https://www.snowflake.com), [Databricks](https://www.databricks.com), [BigQuery](https://cloud.google.com/bigquery), [PostgreSQL](https://www.postgresql.org), [MySQL](https://www.mysql.com), or any other system  with an [ADBC driver](https://columnar.tech/dbc).
 
-Use DuckDB (v1.4 or later) to query [Snowflake](https://www.snowflake.com), [Databricks](https://www.databricks.com), [BigQuery](https://cloud.google.com/bigquery), [PostgreSQL](https://www.postgresql.org), [MySQL](https://www.mysql.com), or any other system  with an [ADBC driver](https://columnar.tech/dbc)!
+![overall](./design/overall.png)
 
 ## What is ADBC?
 
 ADBC (Arrow Database Connectivity) is a universal data-access API built on [Apache Arrow](https://arrow.apache.org/), an efficient, columnar data format that almost [every data system](https://arrow.apache.org/powered_by/) supports natively. 
 
 By building on Arrow, ADBC enables:
-1. Lightning fast (zero-copy) data transfer between column-oriented analytical systems, bypassing the slow column-to-row and row-to-column conversions typical of legacy row-based APIs like ODBC or JDBC.
-2. Seamless interoperability with a large and growing ecosystem of Arrow-compatible data systems.
+1. Lightning fast (zero-copy) data transfer between column-oriented analytical databases, bypassing the slow column-to-row and row-to-column conversions typical of legacy row-based APIs like ODBC or JDBC.
+2. Seamless interoperability with a large and growing ecosystem of Arrow-compatible systems.
 
 ## Extension Installation
 
@@ -21,47 +21,52 @@ INSTALL adbc FROM community;
 LOAD adbc;
 ```
 
-If you prefer to build from source, you can install `cmake` and `ninja` and run:
-
-```sh
-# Clone the repo and its dependencies
-git clone --recurse-submodules git@github.com:columnar-tech/duckdb-adbc-client.git
-cd duckdb-adbc-client
-# Build the extension from source
-GEN=ninja make release
-# Build DuckDB from source
-cd duckdb
-GEN=ninja make release
-# Run DuckDB in unsigned mode to load untrusted extensions
-./build/release/duckdb -unsigned
+<details>
+  <summary>Click here for instructions on how to build the extension from source with cmake and ninja.</summary>
+  
+  ```sh
+  # Clone the repo and its dependencies
+  git clone --recurse-submodules git@github.com:columnar-tech/duckdb-adbc-client.git
+  cd duckdb-adbc-client
+  # Build the extension from source
+  GEN=ninja make release
+  # Build DuckDB from source
+  cd duckdb
+  GEN=ninja make release
+  # Run DuckDB in unsigned mode to load untrusted extensions
+  ./build/release/duckdb -unsigned
+  ```
+  
+  ```sql
+LOAD '../build/release/extension/adbc/adbc.duckdb_extension';
 ```
-
-You can then load the extension by running:
-
-```sql
-LOAD './build/release/adbc/adbc.duckdb_extension'
-```
+  
+</details>
 
 ## Installing ADBC Drivers
 
 [`dbc`](https://columnar.tech/dbc/) is a command-line tool that makes it easy to install and manage ADBC drivers. 
 
-You can install `dbc` by running one of the commands below:
+<details>
+  <summary>Click here for instructions on how to install dbc..</summary>
+  
+  ```sh
+  # shell
+  curl -LsSf https://dbc.columnar.tech/install.sh | sh
+  # brew
+  brew install columnar-tech/tap/dbc
+  # uv
+  uv tool install dbc
+  # pipx
+  pipx install dbc
+  # powershell
+  powershell -ExecutionPolicy ByPass -c irm https://dbc.columnar.tech/install.ps1 | iex
+  # winget
+  winget install dbc
+  ```
+</details>
 
-```sh
-# shell
-curl -LsSf https://dbc.columnar.tech/install.sh | sh
-# brew
-brew install columnar-tech/tap/dbc
-# uv
-uv tool install dbc
-# pipx
-pipx install dbc
-# powershell
-powershell -ExecutionPolicy ByPass -c irm https://dbc.columnar.tech/install.ps1 | iex
-# winget
-winget install dbc
-```
+
 
 After installing `dbc`, you can run `dbc install <system>` to install a driver for a new system.
 
