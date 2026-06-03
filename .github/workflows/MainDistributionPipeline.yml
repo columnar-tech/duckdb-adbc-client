@@ -1,6 +1,4 @@
-#
 # This workflow calls the main distribution pipeline from DuckDB to build, test and (optionally) release the extension
-#
 name: Main Extension Distribution Pipeline
 on:
   push:
@@ -12,19 +10,83 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  duckdb-stable-build:
-    name: Build extension binaries
-    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4.4
+  duckdb-stable-build-v1-4:
+    name: Build extension binaries (v1.4-andium)
+    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
     with:
-      duckdb_version: v1.4.0
-      ci_tools_version: v1.4.4
+      duckdb_version: v1.4-andium
+      ci_tools_version: v1.4-andium
       extension_name: adbc
+      skip_tests: true  # Tests run in separate job below
+
+  duckdb-stable-build-v1-5:
+    name: Build extension binaries (v1.5-variegata)
+    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+    with:
+      duckdb_version: v1.5-variegata
+      ci_tools_version: v1.5-variegata
+      extension_name: adbc
+      skip_tests: true  # Tests run in separate job below
 
   code-quality-check:
     name: Code Quality Check
-    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.4.4
+    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
     with:
-      duckdb_version: v1.4.0
-      ci_tools_version: v1.4.4
+      duckdb_version: v1.5-variegata
+      ci_tools_version: v1.5-variegata
       extension_name: adbc
       format_checks: 'format;tidy'
+
+  test:
+    name: Test ${{ matrix.duckdb_version }} on ${{ matrix.os }}
+    # Ensure BOTH builds complete successfully before testing them
+    needs: [duckdb-stable-build-v1-4, duckdb-stable-build-v1-5]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        duckdb_version: [v1.4-andium, v1.5-variegata]
+        include:
+          - os: ubuntu-latest
+            arch: linux_amd64
+          - os: macos-latest
+            arch: osx_arm64
+          - os: windows-latest
+            arch: windows_amd64
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+
+      # Dynamically references the exact artifact naming standard used by DuckDB CI tools
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: adbc-${{ matrix.duckdb_version }}-extension-${{ matrix.arch }}
+          path: ./extension-artifact
+
+      - name: Install dbc (Linux)
+        if: runner.os == 'Linux'
+        run: curl -LsSf https://dbc.columnar.tech/install.sh | sh
+
+      - name: Install dbc (macOS)
+        if: runner.os == 'macOS'
+        run: brew install columnar-tech/tap/dbc
+
+      - name: Install dbc (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://dbc.columnar.tech/install.ps1'))
+
+      - name: Install ADBC drivers
+        shell: bash
+        run: |
+          dbc install duckdb
+          dbc install sqlite
+
+      - name: Run tests
+        shell: bash  # Guarantees 'make' works flawlessly on Windows runners via Git Bash
+        run: make test_release
