@@ -12,7 +12,7 @@ concurrency:
 jobs:
   duckdb-stable-build-v1-4:
     name: Build extension binaries (v1.4-andium)
-    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
     with:
       duckdb_version: v1.4-andium
       ci_tools_version: v1.4-andium
@@ -21,7 +21,7 @@ jobs:
 
   duckdb-stable-build-v1-5:
     name: Build extension binaries (v1.5-variegata)
-    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
     with:
       duckdb_version: v1.5-variegata
       ci_tools_version: v1.5-variegata
@@ -30,7 +30,7 @@ jobs:
 
   code-quality-check:
     name: Code Quality Check
-    uses: columnar-tech/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
     with:
       duckdb_version: v1.5-variegata
       ci_tools_version: v1.5-variegata
@@ -74,7 +74,7 @@ jobs:
 
       - name: Install dbc (macOS)
         if: runner.os == 'macOS'
-        run: brew install columnar-tech/tap/dbc
+        run: brew install duckdb/tap/dbc
 
       - name: Install dbc (Windows)
         if: runner.os == 'Windows'
