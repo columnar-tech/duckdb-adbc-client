@@ -36,7 +36,7 @@ static void LoadInternal(ExtensionLoader &loader) {
     // Construct a read_adbc(uri, query) function to read from ADBC
     TableFunction read_adbc_function("read_adbc",
                                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // Input URI, SQL query
-                                     adbc::AdbcScanFunction,                       // Custom ADBC scan
+                                     ArrowTableFunction::ArrowScanFunction,        // Use DuckDB's scan
                                      adbc::AdbcScanBindFunction,                   // Custom bind function
                                      ArrowTableFunction::ArrowScanInitGlobal,      // Use DuckDB's init
                                      ArrowTableFunction::ArrowScanInitLocal);      // Use DuckDB's init local
@@ -68,8 +68,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 
     // Storage extension for ATTACH
     auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
+#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
+    StorageExtension::Register(config, "adbc", make_uniq<adbc::AdbcStorageExtension>());
+#else
     config.storage_extensions["adbc"] = make_uniq<adbc::AdbcStorageExtension>();
-
+#endif
     // Create a custom knob to control whether concurrent ADBC reads and writes
     // are supported
     config.AddExtensionOption("adbc_mix_reads_writes",

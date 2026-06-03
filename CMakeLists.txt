@@ -39,6 +39,8 @@ set(EXTENSION_SOURCES
 
 # DuckDB API version
 add_definitions(-DDUCKDB_EXTENSION_NAME=${EXTENSION_NAME})
+add_definitions(-DDUCKDB_MAJOR_VERSION=${DUCKDB_MAJOR_VERSION})
+add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 
 # Build both static and loadable extensions
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})

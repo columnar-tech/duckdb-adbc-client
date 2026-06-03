@@ -71,10 +71,10 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
     auto *schema = reinterpret_cast<ArrowSchema *>(&schema_root.arrow_schema);
 
     // Try running ExecuteSchema(...)
-    auto status = AdbcStatementExecuteSchema(statement, schema, &error);
+    auto schema_status = AdbcStatementExecuteSchema(statement, schema, &error);
 
     // If it's not available, then execute the query, get the schema, and cancel the query
-    if (status == ADBC_STATUS_NOT_IMPLEMENTED) {
+    if (schema_status == ADBC_STATUS_NOT_IMPLEMENTED) {
         Handle<ArrowArrayStream> stream = {};
         int64_t rows_affected = 0;
         CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, &error), BinderException);
@@ -82,61 +82,14 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
         CHECK_ADBC(AdbcStatementCancel(statement, &error), BinderException);
         adbc_arrow_stream_factory->ResetStatement();
     } else {
-        CHECK_ADBC(status, BinderException);
+        CHECK_ADBC(schema_status, BinderException);
     }
+
+#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
+    ArrowTableFunction::PopulateArrowTableSchema(context, arrow_table, schema_root.arrow_schema);
+#else
     ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table, schema_root.arrow_schema);
-}
-
-void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
-
-    // We closely follow the DuckDB Arrow extension's scan function from:
-    // https://github.com/duckdb/arrow/
-    if (!input.local_state) {
-        return;
-    }
-
-    auto &function_data = input.bind_data->CastNoConst<AdbcArrowScanFunctionData>();
-    auto &global_state = input.global_state->Cast<ArrowScanGlobalState>();
-    auto &local_state = input.local_state->Cast<ArrowScanLocalState>();
-
-    // Need more tuples in the current chunk
-    if (local_state.chunk_offset >= static_cast<idx_t>(local_state.chunk->arrow_array.length)) {
-        // Fetch them and exit if there are no more tuples left
-        if (!ArrowTableFunction::ArrowScanParallelStateNext(context,
-                                                            input.bind_data.get(),
-                                                            local_state,
-                                                            global_state)) {
-            return;
-        }
-    }
-
-    // Compute the number of tuples read (and therefore output size)
-    idx_t output_size =
-        MinValue<idx_t>(STANDARD_VECTOR_SIZE, local_state.chunk->arrow_array.length - local_state.chunk_offset);
-    function_data.lines_read += output_size;
-
-    // Handle the case where we don't need all of the columns
-    if (global_state.CanRemoveFilterColumns()) {
-        local_state.all_columns.Reset();
-        local_state.all_columns.SetCapacity(output_size);
-        ArrowTableFunction::ArrowToDuckDB(local_state,
-                                          function_data.arrow_table.GetColumns(),
-                                          local_state.all_columns,
-                                          function_data.lines_read - output_size,
-                                          false);
-        // Map the columns produced by the ADBC scan to the expected projection
-        output.ReferenceColumns(local_state.all_columns, global_state.projection_ids);
-    } else {
-        output.SetCardinality(output_size);
-        ArrowTableFunction::ArrowToDuckDB(local_state,
-                                          function_data.arrow_table.GetColumns(),
-                                          output,
-                                          function_data.lines_read - output_size,
-                                          false);
-    }
-
-    output.Verify();
-    local_state.chunk_offset += output.size();
+#endif
 }
 
 unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,

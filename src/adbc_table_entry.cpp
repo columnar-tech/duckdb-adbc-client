@@ -26,12 +26,12 @@ static optional_idx GetTableCardinality(Private::AdbcConnection *connection,
                                         const char *table_name) {
     Private::AdbcError error = {};
     Handle<ArrowArrayStream> stream = {};
-    AdbcStatusCode status =
+    AdbcStatusCode stats_status =
         AdbcConnectionGetStatistics(connection, nullptr, schema_name, table_name, 1, stream.get(), &error);
-    if (status == ADBC_STATUS_NOT_IMPLEMENTED) {
+    if (stats_status == ADBC_STATUS_NOT_IMPLEMENTED) {
         return optional_idx();
     }
-    CHECK_ADBC(status, IOException);
+    CHECK_ADBC(stats_status, IOException);
     while (true) {
         Handle<ArrowArray> batch = {};
         if (stream->get_next(stream.get(), batch.get()) != 0 || batch->release == nullptr) {
@@ -108,7 +108,7 @@ TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 
     TableFunction scan_adbc_function("read_adbc",
                                      {},
-                                     adbc::AdbcScanFunction,                  // Custom ADBC scan
+                                     ArrowTableFunction::ArrowScanFunction,   // Use DuckDB's scan
                                      nullptr,                                 // Already bound
                                      ArrowTableFunction::ArrowScanInitGlobal, // Use DuckDB's init
                                      ArrowTableFunction::ArrowScanInitLocal); // Use DuckDB's init local
