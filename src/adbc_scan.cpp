@@ -124,19 +124,26 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
     if (global_state.CanRemoveFilterColumns()) {
         local_state.all_columns.Reset();
         local_state.all_columns.SetCapacity(output_size);
+
         ArrowTableFunction::ArrowToDuckDB(local_state,
                                           function_data.arrow_table.GetColumns(),
                                           local_state.all_columns,
+#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
+#else
                                           function_data.lines_read - output_size,
+#endif
                                           false);
-        // Map the columns produced by the ADBC scan to the expected projection
         output.ReferenceColumns(local_state.all_columns, global_state.projection_ids);
     } else {
         output.SetCardinality(output_size);
         ArrowTableFunction::ArrowToDuckDB(local_state,
                                           function_data.arrow_table.GetColumns(),
                                           output,
+
+#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
+#else
                                           function_data.lines_read - output_size,
+#endif
                                           false);
     }
 
