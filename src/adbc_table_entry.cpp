@@ -108,7 +108,7 @@ TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 
     TableFunction scan_adbc_function("read_adbc",
                                      {},
-                                     ArrowTableFunction::ArrowScanFunction,   // Use DuckDB's scan
+                                     adbc::AdbcScanFunction,                  // Use our own ADBC scan
                                      nullptr,                                 // Already bound
                                      ArrowTableFunction::ArrowScanInitGlobal, // Use DuckDB's init
                                      ArrowTableFunction::ArrowScanInitLocal); // Use DuckDB's init local

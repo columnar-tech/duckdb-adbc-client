@@ -36,7 +36,7 @@ static void LoadInternal(ExtensionLoader &loader) {
     // Construct a read_adbc(uri, query) function to read from ADBC
     TableFunction read_adbc_function("read_adbc",
                                      {LogicalType::VARCHAR, LogicalType::VARCHAR}, // Input URI, SQL query
-                                     ArrowTableFunction::ArrowScanFunction,        // Use DuckDB's scan
+                                     adbc::AdbcScanFunction,                       // Use our own ADBC scan
                                      adbc::AdbcScanBindFunction,                   // Custom bind function
                                      ArrowTableFunction::ArrowScanInitGlobal,      // Use DuckDB's init
                                      ArrowTableFunction::ArrowScanInitLocal);      // Use DuckDB's init local
@@ -47,7 +47,7 @@ static void LoadInternal(ExtensionLoader &loader) {
         return make_uniq<NodeStatistics>();
     };
     // Our scanner must project only the required columns
-    read_adbc_function.projection_pushdown = true;
+    read_adbc_function.projection_pushdown = false;
     // No support for filter pushdown
     read_adbc_function.filter_pushdown = false;
     loader.RegisterFunction(read_adbc_function);
