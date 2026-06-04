@@ -74,7 +74,7 @@ After installing `dbc`, you can run `dbc install <system>` to install a driver f
 dbc install postgresql
 ```
 
-To easily manage connection information for each system, you can create a [connection profile](https://arrow.apache.org/adbc/main/format/connection_profiles.html) for each driver (i.e., `postgresql.toml`):
+To easily manage connection information for each system, you can create a [connection profile](https://arrow.apache.org/adbc/main/format/connection_profiles.html) for each driver (i.e., `mydb.toml`):
 
 ```toml
 profile_version = 1
@@ -88,11 +88,11 @@ The last step is to save your profile in the correct location:
 
 ```sh
 # Linux
-mv postgresql.toml ~/.config/adbc/profiles/
+mv mydb.toml ~/.config/adbc/profiles/
 # macOS
-mv postgresql.toml ~/Library/Application Support/ADBC/Profiles/
+mv mydb.toml ~/Library/Application Support/ADBC/Profiles/
 # Windows
-move "postgresql.toml" "%LOCALAPPDATA%\ADBC\Profiles\"
+move "mydb.toml" "%LOCALAPPDATA%\ADBC\Profiles\"
 ```
 
 ## Quickstart
@@ -102,7 +102,7 @@ move "postgresql.toml" "%LOCALAPPDATA%\ADBC\Profiles\"
 To read data through ADBC you can call the `read_adbc` table function by providing a URI to a connection profile and a SQL query. 
 
 ```sql
-D SELECT * FROM read_adbc('profile://postgresql', 'SELECT * FROM games');
+D SELECT * FROM read_adbc('profile://mydb', 'SELECT * FROM games');
 ┌───────┬────────────┬─────────────────────┬───────┬─────────┬─────────────┬─────────────┬────────────┐
 │  id   │    name    │      inventor       │ year  │ min_age │ min_players │ max_players │ list_price │
 │ int32 │  varchar   │       varchar       │ int16 │  int16  │    int16    │    int16    │  varchar   │
@@ -120,7 +120,7 @@ D SELECT * FROM read_adbc('profile://postgresql', 'SELECT * FROM games');
 To perform arbitrary operations via ADBC, you can call `adbc_execute`.
 
 ```sql
-D CALL adbc_execute('profile://postgresql', 'DROP TABLE public.games');
+D CALL adbc_execute('profile://mydb', 'DROP TABLE public.games');
 ┌─────────┐
 │ Success │
 │ boolean │
@@ -134,7 +134,7 @@ D CALL adbc_execute('profile://postgresql', 'DROP TABLE public.games');
 To create a persistent connection to an ADBC database, you can run the `ATTACH` command and then query the ADBC database as if it were a local DuckDB database. We currently support catalog lookups, as well as `SELECT`, `INSERT`, `COPY`, and `CREATE TABLE AS (SELECT ...)` (`CTAS`) statements.
 
 ```sql
-D ATTACH 'profile://postgresql' AS mydb (TYPE adbc);
+D ATTACH 'profile://mydb' AS mydb (TYPE adbc);
 D USE mydb.public;
 D SHOW ALL TABLES;
 ┌──────────┬─────────┬─────────┬──────────────────────┬──────────────────────────────────────────────────┬───────────┐
@@ -187,7 +187,7 @@ D SELECT * FROM game_inventors;
 By default, `ATTACH` delimits all SQL queries with double quotes (i.e., `SELECT * FROM "schema"."table"`). The `DELIMITER` option adds support for systems with different schema/table delimiters (i.e., `[schema].[table]` for SQL Server).
 
 ```sql
-D ATTACH 'profile://postgresql' AS mydb (TYPE adbc, DELIMITER '[]');
+D ATTACH 'profile://mydb' AS mydb (TYPE adbc, DELIMITER '[]');
 ```
 
 ### adbc_clear_cache
