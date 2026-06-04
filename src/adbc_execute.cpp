@@ -33,8 +33,8 @@ void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input, Data
     }
 
     // Execute the command
-    AdbcError error = {};
-    CHECK_ADBC(AdbcStatementExecuteQuery(function_data.statement.get(), nullptr, nullptr, &error), IOException);
+    Handle<AdbcError> error = {};
+    CHECK_ADBC(AdbcStatementExecuteQuery(function_data.statement.get(), nullptr, nullptr, error.get()), IOException);
 
     // Mark as completed
     output.SetCardinality(1);

@@ -38,6 +38,8 @@ AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
 }
 
 void AdbcArrowStreamFactory::ResetStatement() {
+    // Release the statement explicitly
+    Releaser<Private::AdbcStatement>::Release(statement.get());
     // Reset the statement object
     statement = {};
     // Reinitialize it
@@ -49,10 +51,11 @@ unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, 
     auto factory = reinterpret_cast<AdbcArrowStreamFactory *>(factory_ptr);
 
     // Create the stream for the query result
-    AdbcError error = {};
+    Handle<Private::AdbcError> error = {};
     ArrowArrayStream adbc_stream = {};
     int64_t rows_affected;
-    CHECK_ADBC(AdbcStatementExecuteQuery(factory->GetStatement(), &adbc_stream, &rows_affected, &error), IOException);
+    CHECK_ADBC(AdbcStatementExecuteQuery(factory->GetStatement(), &adbc_stream, &rows_affected, error.get()),
+               IOException);
 
     // Create and return the wrapper owning the stream for DuckDB
     auto wrapper = make_uniq<ArrowArrayStreamWrapper>();
@@ -66,20 +69,20 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
       adbc_arrow_stream_factory(std::move(factory)) {
 
     // Retrieve and register the schema information from ADBC with DuckDB
-    AdbcError error = {};
+    Handle<Private::AdbcError> error = {};
     auto *statement = adbc_arrow_stream_factory->GetStatement();
     auto *schema = reinterpret_cast<ArrowSchema *>(&schema_root.arrow_schema);
 
     // Try running ExecuteSchema(...)
-    auto schema_status = AdbcStatementExecuteSchema(statement, schema, &error);
+    auto schema_status = AdbcStatementExecuteSchema(statement, schema, error.get());
 
     // If it's not available, then execute the query, get the schema, and cancel the query
     if (schema_status == ADBC_STATUS_NOT_IMPLEMENTED) {
         Handle<ArrowArrayStream> stream = {};
         int64_t rows_affected = 0;
-        CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, &error), BinderException);
+        CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, error.get()), BinderException);
         stream->get_schema(stream.get(), schema);
-        CHECK_ADBC(AdbcStatementCancel(statement, &error), BinderException);
+        CHECK_ADBC(AdbcStatementCancel(statement, error.get()), BinderException);
         adbc_arrow_stream_factory->ResetStatement();
     } else {
         CHECK_ADBC(schema_status, BinderException);

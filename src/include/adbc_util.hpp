@@ -33,8 +33,7 @@ using namespace Private;
     do {                                                                                                               \
         AdbcStatusCode status = (EXPR);                                                                                \
         if (status != ADBC_STATUS_OK) {                                                                                \
-            auto message = AdbcToString(&error);                                                                       \
-            throw EXCEPTION_TYPE(message);                                                                             \
+            throw EXCEPTION_TYPE(AdbcToString(error.get()));                                                           \
         }                                                                                                              \
     } while (false)
 
@@ -67,14 +66,22 @@ inline std::string StatusCodeToString(AdbcStatusCode code) {
     }
 #undef CASE
 }
-inline std::string AdbcToString(struct AdbcError *error) {
+inline std::string AdbcToString(Private::AdbcError *error) {
     if (error && error->message) {
-        std::string result = error->message;
-        error->release(error);
-        return result;
+        return error->message;
     }
     return "";
 }
+
+template <typename Resource>
+struct Handle {
+    Resource value;
+
+    Handle();
+    ~Handle();
+    Resource *operator->();
+    Resource *get();
+};
 
 template <typename T>
 struct Initializer {
@@ -96,8 +103,8 @@ template <>
 struct Releaser<struct AdbcConnection> {
     static void Release(struct AdbcConnection *value) {
         if (value->private_data) {
-            struct AdbcError error = {};
-            AdbcConnectionRelease(value, &error);
+            Handle<Private::AdbcError> error = {};
+            AdbcConnectionRelease(value, error.get());
         }
     }
 };
@@ -106,8 +113,8 @@ template <>
 struct Releaser<struct AdbcDatabase> {
     static void Release(struct AdbcDatabase *value) {
         if (value->private_data) {
-            struct AdbcError error = {};
-            AdbcDatabaseRelease(value, &error);
+            Handle<Private::AdbcError> error = {};
+            AdbcDatabaseRelease(value, error.get());
         }
     }
 };
@@ -116,47 +123,46 @@ template <>
 struct Releaser<struct AdbcStatement> {
     static void Release(struct AdbcStatement *value) {
         if (value->private_data) {
-            struct AdbcError error = {};
-            AdbcStatementRelease(value, &error);
+            Handle<Private::AdbcError> error = {};
+            AdbcStatementRelease(value, error.get());
         }
     }
 };
 
 template <typename Resource>
-struct Handle {
-    Resource value;
+Handle<Resource>::Handle() {
+    Initializer<Resource>::Initialize(&value);
+}
 
-    Handle() {
-        Initializer<Resource>::Initialize(&value);
-    }
+template <typename Resource>
+Handle<Resource>::~Handle() {
+    Releaser<Resource>::Release(&value);
+}
 
-    ~Handle() {
-        Releaser<Resource>::Release(&value);
-    }
+template <typename Resource>
+Resource *Handle<Resource>::operator->() {
+    return &value;
+}
 
-    Resource *operator->() {
-        return &value;
-    }
-
-    Resource *get() {
-        return &value;
-    }
-};
+template <typename Resource>
+Resource *Handle<Resource>::get() {
+    return &value;
+}
 
 class AdbcConnection {
 public:
     AdbcConnection(const string &uri) : database(), connection() {
         // Initialize the database
-        Private::AdbcError error = {};
-        CHECK_ADBC(AdbcDatabaseNew(database.get(), &error), BinderException);
-        CHECK_ADBC(AdbcDatabaseSetOption(database.get(), "uri", uri.c_str(), &error), BinderException);
-        CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(database.get(), ADBC_LOAD_FLAG_DEFAULT, &error),
+        Handle<Private::AdbcError> error = {};
+        CHECK_ADBC(AdbcDatabaseNew(database.get(), error.get()), BinderException);
+        CHECK_ADBC(AdbcDatabaseSetOption(database.get(), "uri", uri.c_str(), error.get()), BinderException);
+        CHECK_ADBC(AdbcDriverManagerDatabaseSetLoadFlags(database.get(), ADBC_LOAD_FLAG_DEFAULT, error.get()),
                    BinderException);
-        CHECK_ADBC(AdbcDatabaseInit(database.get(), &error), BinderException);
+        CHECK_ADBC(AdbcDatabaseInit(database.get(), error.get()), BinderException);
 
         // Initialize the connection
-        CHECK_ADBC(AdbcConnectionNew(connection.get(), &error), BinderException);
-        CHECK_ADBC(AdbcConnectionInit(connection.get(), database.get(), &error), BinderException);
+        CHECK_ADBC(AdbcConnectionNew(connection.get(), error.get()), BinderException);
+        CHECK_ADBC(AdbcConnectionInit(connection.get(), database.get(), error.get()), BinderException);
     }
     // Disable copy constructors
     AdbcConnection(const AdbcConnection &other) = delete;
@@ -182,9 +188,9 @@ public:
 
     void InitializeStatement(Private::AdbcStatement *statement, const string &query_text) {
         // Initialize the statement
-        Private::AdbcError error = {};
-        CHECK_ADBC(AdbcStatementNew(connection.get(), statement, &error), BinderException);
-        CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), &error), BinderException);
+        Handle<Private::AdbcError> error = {};
+        CHECK_ADBC(AdbcStatementNew(connection.get(), statement, error.get()), BinderException);
+        CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), error.get()), BinderException);
     }
 
 private:

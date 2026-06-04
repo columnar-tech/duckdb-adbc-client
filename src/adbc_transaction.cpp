@@ -41,12 +41,12 @@ Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
     // Ceate a buffer for the option value returned via ADBC
     char option_value[MAX_OPTION_LEN] = {0};
     size_t option_length = MAX_OPTION_LEN;
-    Private::AdbcError error = {};
+    Handle<Private::AdbcError> error = {};
     CHECK_ADBC(AdbcConnectionGetOption(adbc_catalog.GetPooledConnection()->GetRawConnection(),
                                        ADBC_CONNECTION_OPTION_AUTOCOMMIT,
                                        option_value,
                                        &option_length,
-                                       &error),
+                                       error.get()),
                IOException);
 
     bool auto_commit_enabled = (strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0);

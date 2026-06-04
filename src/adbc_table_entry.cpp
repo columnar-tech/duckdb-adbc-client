@@ -24,10 +24,10 @@ namespace adbc {
 static optional_idx GetTableCardinality(Private::AdbcConnection *connection,
                                         const char *schema_name,
                                         const char *table_name) {
-    Private::AdbcError error = {};
+    Handle<Private::AdbcError> error = {};
     Handle<ArrowArrayStream> stream = {};
     AdbcStatusCode stats_status =
-        AdbcConnectionGetStatistics(connection, nullptr, schema_name, table_name, 1, stream.get(), &error);
+        AdbcConnectionGetStatistics(connection, nullptr, schema_name, table_name, 1, stream.get(), error.get());
     if (stats_status == ADBC_STATUS_NOT_IMPLEMENTED) {
         return optional_idx();
     }

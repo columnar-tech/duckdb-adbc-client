@@ -261,7 +261,7 @@ void AdbcCatalog::ForEachCatalog(const char *schema_name,
     auto connection = pool->GetConnection();
 
     // Retrieve the catalog info from the ADBC connection
-    Private::AdbcError error = {};
+    Handle<Private::AdbcError> error = {};
     Handle<ArrowArrayStream> stream = {};
     CHECK_ADBC(AdbcConnectionGetObjects(connection->GetRawConnection(),
                                         depth,
@@ -271,7 +271,7 @@ void AdbcCatalog::ForEachCatalog(const char *schema_name,
                                         nullptr,
                                         nullptr,
                                         stream.get(),
-                                        &error),
+                                        error.get()),
                IOException);
 
     while (true) {
