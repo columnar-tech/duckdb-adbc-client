@@ -31,8 +31,7 @@ unique_ptr<FunctionData> AdbcExecuteBindFunction(ClientContext &context,
 class AdbcExecuteFunctionData : public TableFunctionData {
 public:
     explicit AdbcExecuteFunctionData(const string &uri, const string &query_text)
-        : connection(make_uniq<AdbcConnection>(uri)), statement() {
-        connection->InitializeStatement(statement.get(), query_text);
+        : connection(make_uniq<AdbcConnection>(uri)), statement(connection->MakeStatement(query_text)) {
     }
 
     unique_ptr<AdbcConnection> connection;

@@ -213,11 +213,12 @@ public:
         return database.get();
     }
 
-    void InitializeStatement(Private::AdbcStatement *statement, const string &query_text) {
-        // Initialize the statement
+    Handle<Private::AdbcStatement> MakeStatement(const string &query_text) {
+        Handle<Private::AdbcStatement> statement = {};
         Handle<Private::AdbcError> error = {};
-        CHECK_ADBC(AdbcStatementNew(connection.get(), statement, error.get()), BinderException);
-        CHECK_ADBC(AdbcStatementSetSqlQuery(statement, query_text.c_str(), error.get()), BinderException);
+        CHECK_ADBC(AdbcStatementNew(connection.get(), statement.get(), error.get()), BinderException);
+        CHECK_ADBC(AdbcStatementSetSqlQuery(statement.get(), query_text.c_str(), error.get()), BinderException);
+	return statement;
     }
 
 private:

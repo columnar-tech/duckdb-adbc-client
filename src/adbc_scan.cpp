@@ -18,19 +18,20 @@
 #include "adbc_scan.hpp"
 #include "adbc_util.hpp"
 #include "duckdb/main/config.hpp"
+
 namespace duckdb {
 namespace adbc {
 
 using namespace Private;
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri, const string &query_text)
-    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), statement(), query_text(query_text) {
-    connection->GetConnection().InitializeStatement(statement.get(), query_text);
+    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), query_text(query_text),
+      statement(connection->GetConnection().MakeStatement(query_text)) {
 }
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> conn, const string &query_text)
-    : connection(std::move(conn)), statement(), query_text(query_text) {
-    connection->GetConnection().InitializeStatement(statement.get(), query_text);
+    : connection(std::move(conn)), query_text(query_text),
+      statement(connection->GetConnection().MakeStatement(query_text)) {
 }
 
 AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
@@ -38,8 +39,7 @@ AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
 }
 
 void AdbcArrowStreamFactory::ResetStatement() {
-    statement.reset();
-    connection->GetConnection().InitializeStatement(statement.get(), query_text);
+    statement = connection->GetConnection().MakeStatement(query_text);
 }
 
 unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {

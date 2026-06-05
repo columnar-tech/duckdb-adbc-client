@@ -41,8 +41,8 @@ public:
 
 private:
     unique_ptr<AdbcPooledConnection> connection;
-    Handle<Private::AdbcStatement> statement;
     string query_text;
+    Handle<Private::AdbcStatement> statement;
 };
 
 // A wrapper class to take ownership of the factory object (and the
