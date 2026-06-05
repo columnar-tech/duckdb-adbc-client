@@ -122,7 +122,7 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
     // Handle the case where we don't need all of the columns
     if (global_state.CanRemoveFilterColumns()) {
         local_state.all_columns.Reset();
-        local_state.all_columns.SetCapacity(output_size);
+        local_state.all_columns.SetCardinality(output_size);
 
         ArrowTableFunction::ArrowToDuckDB(local_state,
                                           function_data.arrow_table.GetColumns(),

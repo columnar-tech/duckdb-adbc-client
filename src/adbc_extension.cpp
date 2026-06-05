@@ -47,7 +47,7 @@ static void LoadInternal(ExtensionLoader &loader) {
         return make_uniq<NodeStatistics>();
     };
     // Our scanner must project only the required columns
-    read_adbc_function.projection_pushdown = false;
+    read_adbc_function.projection_pushdown = true;
     // No support for filter pushdown
     read_adbc_function.filter_pushdown = false;
     loader.RegisterFunction(read_adbc_function);
