@@ -23,13 +23,10 @@
 #include <condition_variable>
 
 // Check if an ADBC command went wrong, if it did then save the state and return
-#define CHECKPOINT_STATUS(EXPR)                                                                                        \
+#define CHECK_INVALID_STATUS(EXPR)                                                                                     \
     do {                                                                                                               \
-        AdbcStatusCode status = (EXPR);                                                                                \
-        if (status != ADBC_STATUS_OK) {                                                                                \
-            lock_guard<mutex> state_lock(gstate.insert_mutex);                                                         \
-            gstate.status = status;                                                                                    \
-            gstate.error = std::move(error);                                                                           \
+        gstate.status = (EXPR);                                                                                        \
+        if (gstate.status != ADBC_STATUS_OK) {                                                                         \
             return;                                                                                                    \
         }                                                                                                              \
     } while (false)
@@ -252,39 +249,39 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
     auto *connection = gstate.connection->GetRawConnection();
 
     // Wrap the buffered data as an ArrowArrayStream
-    Handle<Private::AdbcError> error = {};
     Handle<ArrowArrayStream> stream = {};
     CreateArrowStreamFromCollection(gstate, stream.get());
 
     // Create the ADBC statement to perform the insert
     Handle<Private::AdbcStatement> statement = {};
-    CHECKPOINT_STATUS(AdbcStatementNew(connection, statement.get(), error.get()));
+    CHECK_INVALID_STATUS(AdbcStatementNew(connection, statement.get(), gstate.error.get()));
 
     // Set append mode only if we are doing an INSERT (not a CTAS)
     if (gstate.insert_mode == InsertMode::APPEND) {
-        CHECKPOINT_STATUS(AdbcStatementSetOption(statement.get(),
-                                                 ADBC_INGEST_OPTION_MODE,
-                                                 ADBC_INGEST_OPTION_MODE_APPEND,
-                                                 error.get()));
+        CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
+                                                    ADBC_INGEST_OPTION_MODE,
+                                                    ADBC_INGEST_OPTION_MODE_APPEND,
+                                                    gstate.error.get()));
     }
 
     // Set the schema name to perform the insert on
-    CHECKPOINT_STATUS(AdbcStatementSetOption(statement.get(),
-                                             ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
-                                             gstate.schema_name.c_str(),
-                                             error.get()));
+    CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
+                                                ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+                                                gstate.schema_name.c_str(),
+                                                gstate.error.get()));
 
     // Set the table name to perform the insert on
-    CHECKPOINT_STATUS(AdbcStatementSetOption(statement.get(),
-                                             ADBC_INGEST_OPTION_TARGET_TABLE,
-                                             gstate.table_name.c_str(),
-                                             error.get()));
+    CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
+                                                ADBC_INGEST_OPTION_TARGET_TABLE,
+                                                gstate.table_name.c_str(),
+                                                gstate.error.get()));
 
     // Bind the stream to the statement
-    CHECKPOINT_STATUS(AdbcStatementBindStream(statement.get(), stream.get(), error.get()));
+    CHECK_INVALID_STATUS(AdbcStatementBindStream(statement.get(), stream.get(), gstate.error.get()));
 
     // Execute the insert
-    CHECKPOINT_STATUS(AdbcStatementExecuteQuery(statement.get(), nullptr, &gstate.rows_affected, error.get()));
+    CHECK_INVALID_STATUS(
+        AdbcStatementExecuteQuery(statement.get(), nullptr, &gstate.rows_affected, gstate.error.get()));
 }
 
 SinkResultType AdbcInsert::Sink(ExecutionContext &context, DataChunk &chunk, OperatorSinkInput &input) const {

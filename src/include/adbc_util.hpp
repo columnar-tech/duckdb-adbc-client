@@ -218,7 +218,7 @@ public:
         Handle<Private::AdbcError> error = {};
         CHECK_ADBC(AdbcStatementNew(connection.get(), statement.get(), error.get()), BinderException);
         CHECK_ADBC(AdbcStatementSetSqlQuery(statement.get(), query_text.c_str(), error.get()), BinderException);
-	return statement;
+        return statement;
     }
 
 private:
