@@ -74,14 +74,25 @@ jobs:
         shell: bash
         run: |
           dbc install duckdb
-          dbc install sqlite
 
       - name: Build
         shell: bash
         env:
           DUCKDB_VERSION: ${{ matrix.duckdb_version }}
-        run: GEN=ninja make release test
+        run: GEN=ninja make release
 
+      - name: Run tests (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: GEN=ninja make test 
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # Use native PowerShell calling semantics and folder parsing
+          & .\build\release\test\unittest.exe test\
+      
   deploy-v1-4:
     name: Deploy extension binaries (v1.4)
     needs: [duckdb-build-v1-4, test]

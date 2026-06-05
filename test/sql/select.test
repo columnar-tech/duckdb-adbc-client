@@ -1,6 +1,6 @@
-# name: test/sql/scanner/interval.test
-# description: Basic 
-# group: [adbc]
+# name: test/sql/select.test
+# description: Basic
+# group: [sql]
 
 query I
 select 1
