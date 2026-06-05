@@ -9,21 +9,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  duckdb-stable-build-v1-4:
-    name: Build extension binaries (v1.4-andium)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
+  # 1. Dynamically builds both v1.4 and v1.5 in parallel
+  duckdb-stable-build:
+    name: Build extension binaries (${{ matrix.duckdb_version }})
+    strategy:
+      matrix:
+        duckdb_version: [v1.4-andium, v1.5-variegata]
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      duckdb_version: v1.4-andium
-      ci_tools_version: v1.4-andium
-      extension_name: adbc
-      skip_tests: true
-
-  duckdb-stable-build-v1-5:
-    name: Build extension binaries (v1.5-variegata)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
-    with:
-      duckdb_version: v1.5-variegata
-      ci_tools_version: v1.5-variegata
+      duckdb_version: ${{ matrix.duckdb_version }}
+      ci_tools_version: ${{ matrix.duckdb_version }}
       extension_name: adbc
       skip_tests: true
 
@@ -36,11 +31,12 @@ jobs:
       extension_name: adbc
       format_checks: 'format;tidy'
 
+  # 2. Runs tests immediately in parallel
   test:
     name: Test ${{ matrix.duckdb_version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true # Instantly kills other runners if one environment fails
+      fail-fast: true
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
         duckdb_version: [v1.4-andium, v1.5-variegata]
@@ -80,30 +76,19 @@ jobs:
         shell: bash
         env:
           DUCKDB_VERSION: ${{ matrix.duckdb_version }}
-        run: GEN=ninja make release
+        run: GEN=ninja make release test
 
-      - name: Run tests
-        shell: bash
-        run: make test_release
-
-  deploy-v1-4:
-    name: Deploy extension binaries (v1.4-andium)
-    needs: [duckdb-stable-build-v1-4, test]
+  # 3. Dynamically deploys both versions, ONLY if builds and tests pass
+  deploy:
+    name: Deploy extension binaries (${{ matrix.duckdb_version }})
+    needs: [duckdb-stable-build, test]
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.4-andium
+    strategy:
+      matrix:
+        duckdb_version: [v1.4-andium, v1.5-variegata]
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@main
     secrets: inherit
     with:
-      duckdb_version: v1.4-andium
-      ci_tools_version: v1.4-andium
-      extension_name: adbc
-
-  deploy-v1-5:
-    name: Deploy extension binaries (v1.5-variegata)
-    needs: [duckdb-stable-build-v1-5, test]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
-    secrets: inherit
-    with:
-      duckdb_version: v1.5-variegata
-      ci_tools_version: v1.5-variegata
+      duckdb_version: ${{ matrix.duckdb_version }}
+      ci_tools_version: ${{ matrix.duckdb_version }}
       extension_name: adbc
