@@ -74,36 +74,83 @@ inline std::string AdbcToString(Private::AdbcError *error) {
 }
 
 template <typename Resource>
-struct Handle {
-    Resource value;
-
-    Handle();
-    ~Handle();
-    Resource *operator->();
-    Resource *get();
-};
-
-template <typename T>
 struct Initializer {
-    static void Initialize(T *value) {
-        memset(value, 0, sizeof(T));
+    static void Initialize(Resource *value) {
+        memset(value, 0, sizeof(Resource));
     }
 };
 
-template <typename T>
+template <typename Resource>
 struct Releaser {
-    static void Release(T *value) {
+    static void Release(Resource *value) {
         if (value->release) {
             value->release(value);
         }
     }
 };
 
+template <typename Resource>
+struct Handle {
+    Resource value{};
+
+    Handle() {
+        Initializer<Resource>::Initialize(&value);
+    }
+
+    Handle(const Handle &) = delete;
+    Handle &operator=(const Handle &) = delete;
+
+    Handle(Handle &&other) noexcept : value(other.value) {
+        Initializer<Resource>::Initialize(&other.value);
+    }
+
+    Handle &operator=(Handle &&other) noexcept {
+        if (this != &other) {
+            Releaser<Resource>::Release(&value);
+            value = other.value;
+            Initializer<Resource>::Initialize(&other.value);
+        }
+        return *this;
+    }
+
+    ~Handle() {
+        Releaser<Resource>::Release(&value);
+    }
+
+    Resource *operator->() {
+        return &value;
+    }
+    const Resource *operator->() const {
+        return &value;
+    }
+
+    Resource *get() {
+        return &value;
+    }
+    const Resource *get() const {
+        return &value;
+    }
+
+    Resource release() noexcept {
+        Resource tmp = value;
+        Initializer<Resource>::Initialize(&value);
+        return tmp;
+    }
+
+    void reset() noexcept {
+        Releaser<Resource>::Release(&value);
+        Initializer<Resource>::Initialize(&value);
+    }
+};
+
+// Releaser specializations come after Handle is fully defined,
+// since they instantiate Handle<Private::AdbcError> by value.
+
 template <>
 struct Releaser<struct AdbcConnection> {
     static void Release(struct AdbcConnection *value) {
         if (value->private_data) {
-            Handle<Private::AdbcError> error = {};
+            Handle<Private::AdbcError> error{};
             AdbcConnectionRelease(value, error.get());
         }
     }
@@ -113,7 +160,7 @@ template <>
 struct Releaser<struct AdbcDatabase> {
     static void Release(struct AdbcDatabase *value) {
         if (value->private_data) {
-            Handle<Private::AdbcError> error = {};
+            Handle<Private::AdbcError> error{};
             AdbcDatabaseRelease(value, error.get());
         }
     }
@@ -123,31 +170,11 @@ template <>
 struct Releaser<struct AdbcStatement> {
     static void Release(struct AdbcStatement *value) {
         if (value->private_data) {
-            Handle<Private::AdbcError> error = {};
+            Handle<Private::AdbcError> error{};
             AdbcStatementRelease(value, error.get());
         }
     }
 };
-
-template <typename Resource>
-Handle<Resource>::Handle() {
-    Initializer<Resource>::Initialize(&value);
-}
-
-template <typename Resource>
-Handle<Resource>::~Handle() {
-    Releaser<Resource>::Release(&value);
-}
-
-template <typename Resource>
-Resource *Handle<Resource>::operator->() {
-    return &value;
-}
-
-template <typename Resource>
-Resource *Handle<Resource>::get() {
-    return &value;
-}
 
 class AdbcConnection {
 public:

@@ -38,11 +38,7 @@ AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
 }
 
 void AdbcArrowStreamFactory::ResetStatement() {
-    // Release the statement explicitly
-    Releaser<Private::AdbcStatement>::Release(statement.get());
-    // Reset the statement object
-    statement = {};
-    // Reinitialize it
+    statement.reset();
     connection->GetConnection().InitializeStatement(statement.get(), query_text);
 }
 
