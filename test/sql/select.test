@@ -1,0 +1,8 @@
+# name: test/sql/scanner/interval.test
+# description: Basic 
+# group: [adbc]
+
+query I
+select 1
+----
+1
