@@ -34,7 +34,6 @@ jobs:
       format_checks: 'format;tidy'
   test:
     name: Test ${{ matrix.duckdb_version }} on ${{ matrix.os }}
-    needs: [duckdb-stable-build-v1-4, duckdb-stable-build-v1-5]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
