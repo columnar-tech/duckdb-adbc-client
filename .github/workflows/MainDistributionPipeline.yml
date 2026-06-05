@@ -17,7 +17,6 @@ jobs:
       ci_tools_version: v1.4-andium
       extension_name: adbc
       skip_tests: true
-      deploy: false
 
   duckdb-stable-build-v1-5:
     name: Build extension binaries (v1.5-variegata)
@@ -27,7 +26,6 @@ jobs:
       ci_tools_version: v1.5-variegata
       extension_name: adbc
       skip_tests: true
-      deploy: false
 
   code-quality-check:
     name: Code Quality Check
