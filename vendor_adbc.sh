@@ -87,8 +87,5 @@ done
 cp ./arrow-adbc/c/vendor/nanoarrow/nanoarrow.c $VENDOR_IMPL_PATH/adbc_nanoarrow.cpp
 sed -i 's/nanoarrow.h/adbc-vendor\/adbc_nanoarrow.h/g' $VENDOR_IMPL_PATH/adbc_nanoarrow.cpp
 
-# Last and most obscure step: use RTLD_DEEPBIND to handle libduckdb.so in the extension AND in the DuckDB ADBC driver
-sed -i 's/RTLD_NOW | RTLD_LOCAL/RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND/g' $VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp
-
 # Clang-format everything to pass CI
 python3 duckdb/scripts/format.py --all --fix --noconfirm --directories src test
