@@ -5,6 +5,6 @@
 require adbc
 
 query I
-SELECT * FROM read_adbc('profile://penguins', 'SELECT species FROM penguins ORDER BY species LIMIT 1')
+SELECT * FROM read_adbc('profile://./test/penguins.toml', 'SELECT species FROM penguins ORDER BY species LIMIT 1')
 ----
 Adelie

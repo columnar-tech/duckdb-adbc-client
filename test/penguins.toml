@@ -1,0 +1,5 @@
+profile_version = 1
+driver = "duckdb"
+
+[Options]
+path = "./test/penguins.db"
