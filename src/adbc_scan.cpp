@@ -18,7 +18,7 @@
 #include "adbc_scan.hpp"
 #include "adbc_util.hpp"
 #include "duckdb/main/config.hpp"
-
+#include <iostream>
 namespace duckdb {
 namespace adbc {
 
@@ -71,6 +71,7 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
 
     // Try running ExecuteSchema(...)
     auto schema_status = AdbcStatementExecuteSchema(statement, schema, error.get());
+    std::cout << StatusCodeToString(schema_status) << std::endl;
 
     // If it's not available, then execute the query, get the schema, and cancel the query
     if (schema_status == ADBC_STATUS_NOT_IMPLEMENTED) {
