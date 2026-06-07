@@ -71,7 +71,7 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
 
     // Try running ExecuteSchema(...)
     auto schema_status = AdbcStatementExecuteSchema(statement, schema, error.get());
-    std::cout << StatusCodeToString(schema_status) << std::endl;
+    std::cerr << StatusCodeToString(schema_status) << std::endl;
 
     // If it's not available, then execute the query, get the schema, and cancel the query
     if (schema_status == ADBC_STATUS_NOT_IMPLEMENTED) {
@@ -79,7 +79,7 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
         int64_t rows_affected = 0;
         CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, error.get()), BinderException);
         stream->get_schema(stream.get(), schema);
-        CHECK_ADBC(AdbcStatementCancel(statement, error.get()), BinderException);
+        //      CHECK_ADBC(AdbcStatementCancel(statement, error.get()), BinderException);
         adbc_arrow_stream_factory->ResetStatement();
     } else {
         CHECK_ADBC(schema_status, BinderException);
