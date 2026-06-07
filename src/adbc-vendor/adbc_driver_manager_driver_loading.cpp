@@ -690,7 +690,7 @@ AdbcStatusCode ManagedLibrary::Load(const string_type &library,
     static const std::string kPlatformLibrarySuffix = ".so";
 #endif // defined(__APPLE__)
 
-    void *handle = dlopen(library.c_str(), RTLD_NOW | RTLD_LOCAL);
+    void *handle = dlopen(library.c_str(), RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
     if (!handle) {
         error_message = "Could not load `";
         error_message += library;
@@ -714,7 +714,7 @@ AdbcStatusCode ManagedLibrary::Load(const string_type &library,
                                kPlatformLibrarySuffix) != 0) {
             full_driver_name += kPlatformLibrarySuffix;
         }
-        handle = dlopen(full_driver_name.c_str(), RTLD_NOW | RTLD_LOCAL);
+        handle = dlopen(full_driver_name.c_str(), RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
         if (!handle) {
             error_message += "\ndlopen() failed: ";
             error_message += dlerror();
