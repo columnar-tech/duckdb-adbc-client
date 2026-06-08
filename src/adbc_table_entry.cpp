@@ -66,17 +66,20 @@ static optional_idx GetTableCardinality(Private::AdbcConnection *connection,
             continue;
         }
         auto *double_child = static_cast<ArrowArray *>(stat_val_col->children[2]);
-        if (!stat_key_col->buffers[1] || !stat_val_col->buffers[0] || !double_child->buffers[1]) {
+        // Dense union has: buffers[0] = type ids, buffers[1] = offsets
+        if (!stat_key_col->buffers[1] || !stat_val_col->buffers[0] || !stat_val_col->buffers[1] ||
+            !double_child->buffers[1]) {
             continue;
         }
         const auto *keys = static_cast<const int16_t *>(stat_key_col->buffers[1]);
         const auto *types = static_cast<const int8_t *>(stat_val_col->buffers[0]);
+        const auto *offsets = static_cast<const int32_t *>(stat_val_col->buffers[1]);
         const auto *values = static_cast<const double *>(double_child->buffers[1]);
         const auto *validity = static_cast<const uint8_t *>(col_name_col->buffers[0]);
         for (int64_t i = 0; i < table_struct->length; i++) {
             bool is_whole_table = !validity || !((validity[i / 8] >> (i % 8)) & 1);
             if (is_whole_table && keys[i] == ADBC_STATISTIC_ROW_COUNT_KEY && types[i] == 2) {
-                return optional_idx(static_cast<idx_t>(values[i]));
+                return optional_idx(static_cast<idx_t>(values[offsets[i]]));
             }
         }
     }

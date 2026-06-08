@@ -1,5 +1,5 @@
 profile_version = 1
-driver = "duckdb"
+driver = "sqlite"
 
 [Options]
-path = "./test/penguins.db"
+uri = "./test/penguins.sqlite"

@@ -1,24 +1,52 @@
-# name: test/sql/read_adbc.test
+# name: test/sql/sqlite/read_adbc.test
 # description: Test the functionality of read_adbc(...)
-# group: [sql]
+# group: [sqlite]
 
 require adbc
 
-# Select a constructed BOOL column
+statement ok
+INSTALL sqlite
+
+statement ok
+INSTALL httpfs
+
+statement ok
+LOAD httpfs
+
+# Create a SQLite DB for penguins
+statement ok
+ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
+
+# Create the penguins table
+statement ok
+CREATE TABLE IF NOT EXISTS sqlite_db.penguins AS (
+SELECT *
+  FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
+
+# Write it out to SQLite
+statement ok
+DETACH sqlite_db
+
+# Create a convenience macro
+statement ok
+CREATE MACRO penguins(query) AS TABLE
+    SELECT * FROM read_adbc('profile://./test/penguins.toml', query) 
+
+# Select a constructed boolean column (integer)
 query I
 SELECT *
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT year > 2000 FROM penguins ORDER BY * LIMIT 5')
+  FROM penguins('SELECT year > 2000 FROM penguins ORDER BY 1 LIMIT 5')
 ----
-true
-true
-true
-true
-true
+1
+1
+1
+1
+1
 
 # Select a single INTEGER column 
 query I
 SELECT *
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT year FROM penguins ORDER BY * LIMIT 5')
+  FROM penguins('SELECT year FROM penguins ORDER BY year LIMIT 5')
 ----
 2007
 2007
@@ -29,18 +57,18 @@ SELECT *
 # Select a single DOUBLE column 
 query R
 SELECT *
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT bill_depth_mm FROM penguins ORDER BY * LIMIT 5')
+  FROM penguins('SELECT bill_depth_mm FROM penguins ORDER BY bill_depth_mm LIMIT 5')
 ----
+NULL
+NULL
 13.1
 13.2
 13.3
-13.4
-13.5
 
 # Select a single VARCHAR column 
 query T
 SELECT *
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT species FROM penguins ORDER BY * LIMIT 5')
+  FROM penguins('SELECT species FROM penguins ORDER BY species LIMIT 5')
 ----
 Adelie
 Adelie
@@ -51,7 +79,9 @@ Adelie
 # Select each column from DuckDB
 query T I R
 SELECT species, year, bill_depth_mm 
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins ORDER BY * LIMIT 5')
+  FROM penguins('SELECT * FROM penguins')
+ ORDER BY *
+ LIMIT 5
 ----
 Adelie	2008	18.1
 Adelie	2008	17.9
@@ -62,7 +92,9 @@ Adelie	2008	16.2
 # Select the columns out of order 
 query I R T
 SELECT  year, bill_depth_mm, species
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins ORDER BY * LIMIT 5')
+  FROM penguins('SELECT * FROM penguins')
+ ORDER BY *
+ LIMIT 5
 ----
 2008	18.1	Adelie
 2008	17.9	Adelie
@@ -73,21 +105,21 @@ SELECT  year, bill_depth_mm, species
 # Validate the row count
 query I
 SELECT COUNT(*)
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+  FROM penguins('SELECT * FROM penguins')
 ----
 344
 
 # Validate distinct counts for each column
 query I I I I I I I I
 SELECT COUNT(DISTINCT COLUMNS(*))
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+  FROM penguins('SELECT * FROM penguins')
 ----
 3	3	164	80	55	94	2	3
 
 # Apply projection + filter to the scan 
 query T
 SELECT DISTINCT species
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+  FROM penguins('SELECT * FROM penguins')
  WHERE species NOT LIKE 'A%'
  ORDER BY *
 ----
@@ -97,7 +129,7 @@ Gentoo
 # Filter on non-projected column
 query I
 SELECT DISTINCT year
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+  FROM penguins('SELECT * FROM penguins')
  WHERE bill_depth_mm > 21.0
  ORDER BY *
 ----
@@ -107,7 +139,7 @@ SELECT DISTINCT year
 # NULL count with NULL filter
 query I
 SELECT COUNT(*) 
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+  FROM penguins('SELECT * FROM penguins')
  WHERE bill_depth_mm IS NULL
 ----
 2
@@ -115,60 +147,60 @@ SELECT COUNT(*)
 # NULL count
 query I
 SELECT COUNT(*)
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+  FROM penguins('SELECT * FROM penguins')
  WHERE bill_depth_mm IS NOT NULL
 ----
 342
 
 # NULL in VARCHAR column
 query I
-SELECT COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+SELECT COUNT(*) FROM penguins('SELECT * FROM penguins')
  WHERE sex IS NULL
 ----
 11
 
 # Ensure DOUBLE precision is preserved across the boundary
 query I
-SELECT COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+SELECT COUNT(*) FROM penguins('SELECT * FROM penguins')
  WHERE bill_depth_mm = 13.1
 ----
 1
 
 # Arithmetic on returned numeric columns
 query R
-SELECT SUM(bill_depth_mm) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+SELECT SUM(bill_depth_mm) FROM penguins('SELECT * FROM penguins')
 ----
 5865.9
 
 # Empty result from filter
 query T
-SELECT species FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+SELECT species FROM penguins('SELECT * FROM penguins')
  WHERE species = 'NonExistent'
 ----
 
 # Empty result from LIMIT 0
 query I
 SELECT COUNT(*) FROM (
-  SELECT * FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins LIMIT 0')
+  SELECT * FROM penguins('SELECT * FROM penguins LIMIT 0')
 )
 ----
 0
 
 # Force multiple Arrow batches by selecting all rows
 query I
-SELECT COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+SELECT COUNT(*) FROM penguins('SELECT * FROM penguins')
 ----
 344
 
 # Verify no rows are duplicated or dropped across batch boundaries
 query I
-SELECT COUNT(DISTINCT island) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins')
+SELECT COUNT(DISTINCT island) FROM penguins('SELECT * FROM penguins')
 ----
 3
 
 # Join ADBC result with local data
 query I
-SELECT COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins') p
+SELECT COUNT(*) FROM penguins('SELECT * FROM penguins') p
  JOIN (SELECT UNNEST(['Adelie', 'Gentoo']) AS species) s
    ON p.species = s.species
 ----
@@ -176,7 +208,7 @@ SELECT COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM 
 
 # Aggregate across a joined result
 query TI
-SELECT p.species, COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins') p
+SELECT p.species, COUNT(*) FROM penguins('SELECT * FROM penguins') p
  JOIN (SELECT UNNEST(['Adelie', 'Gentoo']) AS species) s
    ON p.species = s.species
  GROUP BY p.species
@@ -188,8 +220,8 @@ Gentoo	124
 # Verify that two independent streams can run concurrently in a self-join
 query I
 SELECT COUNT(*) 
-  FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins') p1
-  JOIN read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins') p2
+  FROM penguins('SELECT * FROM penguins') p1
+  JOIN penguins('SELECT * FROM penguins') p2
     ON p1.year = p2.year
 ----
 39496
