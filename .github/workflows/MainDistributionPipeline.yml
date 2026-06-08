@@ -73,7 +73,7 @@ jobs:
       - name: Install ADBC drivers
         shell: bash
         run: |
-          dbc install duckdb
+          dbc install sqlite 
 
       - name: Build
         shell: bash

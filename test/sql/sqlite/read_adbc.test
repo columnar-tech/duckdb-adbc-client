@@ -29,71 +29,71 @@ DETACH sqlite_db
 
 # Create a convenience macro
 statement ok
-CREATE MACRO penguins(query) AS TABLE
+CREATE OR REPLACE MACRO penguins(query) AS TABLE
     SELECT * FROM read_adbc('profile://./test/penguins.toml', query) 
 
 # Select a constructed boolean column (integer)
-query I
-SELECT *
-  FROM penguins('SELECT year > 2000 FROM penguins ORDER BY 1 LIMIT 5')
+query II
+SELECT x, typeof(x) 
+  FROM penguins('SELECT year > 2000 AS x FROM penguins ORDER BY 1 LIMIT 5')
 ----
-1
-1
-1
-1
-1
+1	BIGINT
+1	BIGINT
+1	BIGINT
+1	BIGINT
+1	BIGINT
 
 # Select a single INTEGER column 
-query I
-SELECT *
+query II
+SELECT year, typeof(year)
   FROM penguins('SELECT year FROM penguins ORDER BY year LIMIT 5')
 ----
-2007
-2007
-2007
-2007
-2007
+2007	BIGINT
+2007	BIGINT
+2007	BIGINT
+2007	BIGINT
+2007	BIGINT
 
 # Select a single DOUBLE column 
-query R
-SELECT *
+query II
+SELECT bill_depth_mm, typeof(bill_depth_mm)
   FROM penguins('SELECT bill_depth_mm FROM penguins ORDER BY bill_depth_mm LIMIT 5')
 ----
-NULL
-NULL
-13.1
-13.2
-13.3
+NULL	DOUBLE
+NULL	DOUBLE
+13.1	DOUBLE
+13.2	DOUBLE
+13.3	DOUBLE
 
 # Select a single VARCHAR column 
-query T
-SELECT *
+query TT
+SELECT species, typeof(species)
   FROM penguins('SELECT species FROM penguins ORDER BY species LIMIT 5')
 ----
-Adelie
-Adelie
-Adelie
-Adelie
-Adelie
+Adelie	VARCHAR
+Adelie	VARCHAR
+Adelie	VARCHAR
+Adelie	VARCHAR
+Adelie	VARCHAR
 
 # Select each column from DuckDB
-query T I R
+query III
 SELECT species, year, bill_depth_mm 
   FROM penguins('SELECT * FROM penguins')
- ORDER BY *
+ ORDER BY year, bill_depth_mm, species 
  LIMIT 5
 ----
-Adelie	2008	18.1
-Adelie	2008	17.9
-Adelie	2009	17.9
-Adelie	2007	18.9
-Adelie	2008	16.2
+Gentoo	2007	13.1
+Gentoo	2007	13.2
+Gentoo	2007	13.4
+Gentoo	2007	13.5
+Gentoo	2007	13.5
 
 # Select the columns out of order 
 query I R T
 SELECT  year, bill_depth_mm, species
   FROM penguins('SELECT * FROM penguins')
- ORDER BY *
+ ORDER BY species, bill_depth_mm, year 
  LIMIT 5
 ----
 2008	18.1	Adelie
@@ -118,10 +118,10 @@ SELECT COUNT(DISTINCT COLUMNS(*))
 
 # Apply projection + filter to the scan 
 query T
-SELECT DISTINCT species
+SELECT DISTINCT species 
   FROM penguins('SELECT * FROM penguins')
  WHERE species NOT LIKE 'A%'
- ORDER BY *
+ ORDER BY species
 ----
 Chinstrap
 Gentoo
@@ -131,7 +131,7 @@ query I
 SELECT DISTINCT year
   FROM penguins('SELECT * FROM penguins')
  WHERE bill_depth_mm > 21.0
- ORDER BY *
+ ORDER BY year
 ----
 2007
 2008
