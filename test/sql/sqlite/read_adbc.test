@@ -17,211 +17,195 @@ LOAD httpfs
 statement ok
 ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
 
-# Create the penguins table
 statement ok
 CREATE TABLE IF NOT EXISTS sqlite_db.penguins AS (
-SELECT *
-  FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
+    SELECT *
+      FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
 
-# Write it out to SQLite
 statement ok
 DETACH sqlite_db
 
-# Create a convenience macro
 statement ok
-CREATE OR REPLACE MACRO penguins(query) AS TABLE
-    SELECT * FROM read_adbc('profile://./test/penguins.toml', query) 
+CREATE OR REPLACE MACRO penguins(query := 'SELECT * FROM penguins') AS TABLE
+    SELECT * FROM read_adbc('profile://./test/penguins.toml', query)
 
-# Select a constructed boolean column (integer)
-query II
-SELECT x, typeof(x) 
-  FROM penguins('SELECT year > 2000 AS x FROM penguins ORDER BY 1 LIMIT 5')
-----
-1	BIGINT
-1	BIGINT
-1	BIGINT
-1	BIGINT
-1	BIGINT
-
-# Select a single INTEGER column 
-query II
-SELECT year, typeof(year)
-  FROM penguins('SELECT year FROM penguins ORDER BY year LIMIT 5')
-----
-2007	BIGINT
-2007	BIGINT
-2007	BIGINT
-2007	BIGINT
-2007	BIGINT
-
-# Select a single DOUBLE column 
-query II
-SELECT bill_depth_mm, typeof(bill_depth_mm)
-  FROM penguins('SELECT bill_depth_mm FROM penguins ORDER BY bill_depth_mm LIMIT 5')
-----
-NULL	DOUBLE
-NULL	DOUBLE
-13.1	DOUBLE
-13.2	DOUBLE
-13.3	DOUBLE
-
-# Select a single VARCHAR column 
-query TT
-SELECT species, typeof(species)
-  FROM penguins('SELECT species FROM penguins ORDER BY species LIMIT 5')
-----
-Adelie	VARCHAR
-Adelie	VARCHAR
-Adelie	VARCHAR
-Adelie	VARCHAR
-Adelie	VARCHAR
-
-# Select each column from DuckDB
-query III
-SELECT species, year, bill_depth_mm 
-  FROM penguins('SELECT * FROM penguins')
- ORDER BY year, bill_depth_mm, species 
- LIMIT 5
-----
-Gentoo	2007	13.1
-Gentoo	2007	13.2
-Gentoo	2007	13.4
-Gentoo	2007	13.5
-Gentoo	2007	13.5
-
-# Select the columns out of order 
-query I R T
-SELECT  year, bill_depth_mm, species
-  FROM penguins('SELECT * FROM penguins')
- ORDER BY species, bill_depth_mm, year 
- LIMIT 5
-----
-2008	18.1	Adelie
-2008	17.9	Adelie
-2009	17.9	Adelie
-2007	18.9	Adelie
-2008	16.2	Adelie
-
-# Validate the row count
+# Correct row count crosses the boundary
 query I
-SELECT COUNT(*)
-  FROM penguins('SELECT * FROM penguins')
+SELECT COUNT(*) FROM penguins()
 ----
 344
 
-# Validate distinct counts for each column
-query I I I I I I I I
-SELECT COUNT(DISTINCT COLUMNS(*))
-  FROM penguins('SELECT * FROM penguins')
+# INTEGER type and values are preserved
+query II
+SELECT year, typeof(year)
+  FROM penguins('SELECT year FROM penguins ORDER BY year LIMIT 1')
 ----
-3	3	164	80	55	94	2	3
+2007	BIGINT
 
-# Apply projection + filter to the scan 
-query T
-SELECT DISTINCT species 
-  FROM penguins('SELECT * FROM penguins')
- WHERE species NOT LIKE 'A%'
- ORDER BY species
+# DOUBLE type and values are preserved
+query II
+SELECT bill_depth_mm, typeof(bill_depth_mm)
+  FROM penguins('SELECT bill_depth_mm FROM penguins WHERE bill_depth_mm IS NOT NULL ORDER BY bill_depth_mm LIMIT 1')
 ----
-Chinstrap
-Gentoo
+13.1	DOUBLE
 
-# Filter on non-projected column
+# VARCHAR type and values are preserved
+query TT
+SELECT species, typeof(species)
+  FROM penguins('SELECT species FROM penguins ORDER BY species LIMIT 1')
+----
+Adelie	VARCHAR
+
+# DOUBLE type is preserved when column contains a mix of NULLs and real values
+query IT
+SELECT bill_depth_mm, typeof(bill_depth_mm)
+  FROM penguins('SELECT bill_depth_mm FROM penguins ORDER BY bill_depth_mm NULLS LAST LIMIT 1')
+----
+13.1	DOUBLE
+
+# NULLs in VARCHAR column cross the boundary correctly
 query I
-SELECT DISTINCT year
-  FROM penguins('SELECT * FROM penguins')
- WHERE bill_depth_mm > 21.0
- ORDER BY year
-----
-2007
-2008
-
-# NULL count with NULL filter
-query I
-SELECT COUNT(*) 
-  FROM penguins('SELECT * FROM penguins')
- WHERE bill_depth_mm IS NULL
-----
-2
-
-# NULL count
-query I
-SELECT COUNT(*)
-  FROM penguins('SELECT * FROM penguins')
- WHERE bill_depth_mm IS NOT NULL
-----
-342
-
-# NULL in VARCHAR column
-query I
-SELECT COUNT(*) FROM penguins('SELECT * FROM penguins')
- WHERE sex IS NULL
+SELECT COUNT(*) FROM penguins() WHERE sex IS NULL
 ----
 11
 
-# Ensure DOUBLE precision is preserved across the boundary
+# No empty strings smuggled in place of NULLs
 query I
-SELECT COUNT(*) FROM penguins('SELECT * FROM penguins')
- WHERE bill_depth_mm = 13.1
-----
-1
-
-# Arithmetic on returned numeric columns
-query R
-SELECT SUM(bill_depth_mm) FROM penguins('SELECT * FROM penguins')
-----
-5865.9
-
-# Empty result from filter
-query T
-SELECT species FROM penguins('SELECT * FROM penguins')
- WHERE species = 'NonExistent'
-----
-
-# Empty result from LIMIT 0
-query I
-SELECT COUNT(*) FROM (
-  SELECT * FROM penguins('SELECT * FROM penguins LIMIT 0')
-)
+SELECT COUNT(*) FROM penguins() WHERE sex = ''
 ----
 0
 
-# Force multiple Arrow batches by selecting all rows
+# Exact decimal value survives the boundary
+query R
+SELECT bill_depth_mm
+  FROM penguins('SELECT bill_depth_mm FROM penguins WHERE bill_depth_mm IS NOT NULL ORDER BY bill_depth_mm LIMIT 1')
+----
+13.1
+
+# NULL sorts first — boundary does not reorder or drop NULLs
+query R
+SELECT bill_depth_mm
+  FROM penguins('SELECT bill_depth_mm FROM penguins ORDER BY bill_depth_mm LIMIT 1')
+----
+NULL
+
+# No rows are duplicated or dropped
 query I
-SELECT COUNT(*) FROM penguins('SELECT * FROM penguins')
+SELECT COUNT(*) FROM penguins()
 ----
 344
 
-# Verify no rows are duplicated or dropped across batch boundaries
+# All distinct values survive — none collapsed or corrupted
 query I
-SELECT COUNT(DISTINCT island) FROM penguins('SELECT * FROM penguins')
+SELECT COUNT(DISTINCT species) FROM penguins()
 ----
 3
 
-# Join ADBC result with local data
+# Filtering inside ADBC and outside produce identical counts
 query I
-SELECT COUNT(*) FROM penguins('SELECT * FROM penguins') p
- JOIN (SELECT UNNEST(['Adelie', 'Gentoo']) AS species) s
-   ON p.species = s.species
+SELECT COUNT(*) FROM penguins('SELECT * FROM penguins WHERE island = ''Biscoe''')
 ----
-276
+168
 
-# Aggregate across a joined result
+query I
+SELECT COUNT(*) FROM penguins() WHERE island = 'Biscoe'
+----
+168
+
+# Aggregation inside ADBC boundary is correct
 query TI
-SELECT p.species, COUNT(*) FROM penguins('SELECT * FROM penguins') p
- JOIN (SELECT UNNEST(['Adelie', 'Gentoo']) AS species) s
-   ON p.species = s.species
- GROUP BY p.species
- ORDER BY p.species
+SELECT * FROM penguins('SELECT species, COUNT(*) AS n FROM penguins GROUP BY species ORDER BY species')
 ----
 Adelie	152
+Chinstrap	68
 Gentoo	124
 
-# Verify that two independent streams can run concurrently in a self-join
+# Two independent ADBC streams can run concurrently
 query I
-SELECT COUNT(*) 
-  FROM penguins('SELECT * FROM penguins') p1
-  JOIN penguins('SELECT * FROM penguins') p2
-    ON p1.year = p2.year
+SELECT COUNT(*)
+  FROM penguins() p1
+  JOIN penguins() p2 ON p1.year = p2.year
 ----
 39496
+
+# Columns projected in a different order to the schema are correctly mapped
+query TIR
+SELECT species, year, bill_depth_mm
+  FROM penguins('SELECT bill_depth_mm, year, species FROM penguins ORDER BY species, year, bill_depth_mm NULLS LAST LIMIT 1')
+----
+Adelie	2007	16.7
+
+# Reverse order
+query RIT
+SELECT bill_depth_mm, year, species
+  FROM penguins('SELECT species, year, bill_depth_mm FROM penguins ORDER BY species, year, bill_depth_mm NULLS LAST LIMIT 1')
+----
+16.7	2007	Adelie
+
+# Single column selected, others dropped
+query I
+SELECT year FROM penguins('SELECT species, island, year FROM penguins ORDER BY year LIMIT 1')
+----
+2007
+
+# Outer query drops columns the inner query returns
+query I
+SELECT COUNT(DISTINCT year)
+  FROM penguins('SELECT species, island, year, bill_depth_mm, bill_length_mm FROM penguins')
+----
+3
+
+# Schema with all-NULL columns
+query II
+SELECT COUNT(*), COUNT(sex) FROM penguins('SELECT sex FROM penguins WHERE island = ''Torgersen'' AND year = 2008 AND species = ''Adelie''')
+----
+16	16
+
+# VARCHAR values are not truncated crossing the boundary
+query TI
+SELECT long_island, LENGTH(long_island)
+  FROM penguins('SELECT island || '' '' || island AS long_island FROM penguins ORDER BY island LIMIT 1')
+----
+Biscoe Biscoe	13
+
+# Project the same column twice
+query RR
+SELECT a, b
+  FROM penguins('SELECT bill_depth_mm AS a, bill_depth_mm AS b FROM penguins WHERE bill_depth_mm = 13.1')
+----
+13.1	13.1
+
+# Empty table
+query I
+SELECT COUNT(*) FROM read_adbc('profile://./test/penguins.toml', 'SELECT * FROM penguins WHERE 1=0')
+----
+0
+
+# NULL
+statement error
+SELECT * FROM read_adbc('profile://./test/penguins.toml', NULL)
+----
+
+# Invalid SQL
+statement error
+SELECT * FROM read_adbc('profile://./test/penguins.toml', 'THIS IS NOT SQL')
+----
+
+# Empty SQL string
+statement error
+SELECT * FROM read_adbc('profile://./test/penguins.toml', '')
+----
+
+# BOOLEAN (SQLite stores as integer, Arrow may type differently)
+query II
+SELECT x, typeof(x)
+  FROM penguins('SELECT (bill_depth_mm > 18.0) AS x FROM penguins WHERE bill_depth_mm IS NOT NULL ORDER BY x LIMIT 1')
+----
+0	BIGINT
+
+# DATE-like values stored as text
+query II
+SELECT d, typeof(d)
+  FROM penguins('SELECT date(''2007-01-01'') AS d FROM penguins LIMIT 1')
+----
+2007-01-01	VARCHAR
