@@ -18,7 +18,7 @@
 #include "adbc_scan.hpp"
 #include "adbc_util.hpp"
 #include "duckdb/main/config.hpp"
-#include <iostream>
+
 namespace duckdb {
 namespace adbc {
 
