@@ -18,7 +18,7 @@ statement ok
 ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
 
 statement ok
-CREATE TABLE IF NOT EXISTS sqlite_db.penguins AS (
+CREATE OR REPLACE TABLE sqlite_db.penguins AS (
     SELECT *
       FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
 

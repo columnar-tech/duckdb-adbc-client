@@ -1,0 +1,135 @@
+# name: test/sql/sqlite/adbc_execute.test
+# description: Test the functionality of adbc_execute(...)
+# group: [sqlite]
+
+require adbc
+
+statement ok
+INSTALL sqlite
+
+statement ok
+INSTALL httpfs
+
+statement ok
+LOAD httpfs
+
+# Create a SQLite DB for penguins
+statement ok
+ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
+
+statement ok
+CREATE TABLE IF NOT EXISTS sqlite_db.penguins AS (
+    SELECT *
+      FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
+
+statement ok
+DETACH sqlite_db
+
+statement ok
+CREATE OR REPLACE MACRO penguins(query := 'SELECT * FROM penguins') AS TABLE
+    SELECT * FROM read_adbc('profile://./test/penguins.toml', query)
+
+statement ok
+CREATE OR REPLACE MACRO adbc_exec(query) AS TABLE FROM adbc_execute('profile://./test/penguins.toml', query)
+
+# Drop table if it already exists
+statement ok
+CALL adbc_exec('DROP TABLE IF EXISTS test');
+
+# Create table
+statement ok
+CALL adbc_exec('CREATE TABLE IF NOT EXISTS test (x INTEGER)');
+
+# read_adbc should return empty
+query I
+SELECT * FROM penguins('SELECT * FROM test');
+----
+
+# Insert
+statement ok
+CALL adbc_exec('INSERT INTO test VALUES (1)');
+
+# read_adbc should contain the row now 
+query I
+SELECT * FROM penguins('SELECT * FROM test');
+----
+1
+
+# Insert more data 
+statement ok
+CALL adbc_exec('INSERT INTO test VALUES (NULL), (2), (3)');
+
+# read_adbc should contain the new data
+query I
+SELECT * FROM penguins('SELECT * FROM test');
+----
+1
+NULL
+2
+3
+
+# Delete data
+statement ok
+CALL adbc_exec('DELETE FROM test WHERE x = 2');
+
+# read_adbc should not contain the deleted data
+query I
+SELECT * FROM penguins('SELECT * FROM test');
+----
+1
+NULL
+3
+
+# Update data
+statement ok
+CALL adbc_exec('UPDATE test SET x = 99 WHERE x = 1');
+
+# read_adbc should not contain the deleted data
+query I
+SELECT * FROM penguins('SELECT * FROM test');
+----
+99
+NULL
+3
+
+# Drop table 
+statement ok
+CALL adbc_exec('DROP TABLE test');
+
+# read_adbc should fail
+statement error
+SELECT * FROM penguins('SELECT * FROM test');
+----
+
+# Invalid SQL is rejected cleanly
+statement error
+CALL adbc_exec('THIS IS NOT SQL')
+----
+
+# SQL against a nonexistent table errors cleanly
+statement error
+CALL adbc_exec('INSERT INTO nonexistent VALUES (1)')
+----
+
+# Bad profile path errors cleanly
+statement error
+CALL adbc_execute('profile://./nonexistent.toml', 'SELECT 1')
+----
+
+# NULL query errors cleanly
+statement error
+CALL adbc_exec(NULL)
+----
+
+# Check that after errors occur that subsequent invocations succeed
+statement ok
+CALL adbc_exec('CREATE TABLE test(x INTEGER)')
+
+# read_adbc should return zero rows 
+query I
+SELECT * FROM penguins('SELECT * FROM test'); 
+----
+
+# Cleanup
+statement ok
+CALL adbc_exec('DROP TABLE test');
