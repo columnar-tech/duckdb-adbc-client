@@ -52,9 +52,15 @@ jobs:
           - os: windows-latest
             arch: windows_amd64
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+          
       - uses: columnar-tech/setup-dbc@v1
-      - run: dbc install sqlite
+      
+      - name: Install ADBC Drivers
+        run: dbc install sqlite
       
       - name: Build
         shell: bash
