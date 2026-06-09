@@ -52,29 +52,10 @@ jobs:
           - os: windows-latest
             arch: windows_amd64
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          submodules: 'recursive'
-
-      - name: Install dbc (Linux)
-        if: runner.os == 'Linux'
-        run: curl -LsSf https://dbc.columnar.tech/install.sh | sh
-
-      - name: Install dbc (macOS)
-        if: runner.os == 'macOS'
-        run: curl -LsSf https://dbc.columnar.tech/install.sh | sh
-
-      - name: Install dbc (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('https://dbc.columnar.tech/install.ps1'))
-
-      - name: Install ADBC drivers
-        shell: bash
-        run: |
-          dbc install sqlite 
-
+      - uses: actions/checkout@v6
+      - uses: columnar-tech/setup-dbc@v1
+      - run: dbc install sqlite
+      
       - name: Build
         shell: bash
         env:
