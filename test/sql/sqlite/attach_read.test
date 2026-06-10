@@ -1,0 +1,206 @@
+# name: test/sql/sqlite/attach_read.test
+# description: Test the functionality of ATTACH to read tables
+# group: [sqlite]
+
+require adbc
+
+statement ok
+INSTALL sqlite
+
+statement ok
+INSTALL httpfs
+
+statement ok
+LOAD httpfs
+
+# Create a SQLite DB for penguins
+statement ok
+ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
+
+statement ok
+CREATE OR REPLACE TABLE sqlite_db.penguins AS (
+    SELECT *
+      FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
+
+statement ok
+DETACH sqlite_db
+
+# Now attach to the sqlite database
+statement ok
+ATTACH 'profile://./test/penguins.toml' AS sqlite_db (TYPE adbc);
+
+statement ok
+USE sqlite_db.main;
+
+# Correct row count crosses the boundary
+query I
+SELECT COUNT(*) FROM penguins
+----
+344
+
+# INTEGER type and values are preserved
+query II
+SELECT year, typeof(year)
+  FROM penguins
+ ORDER BY year
+ LIMIT 1
+----
+2007	BIGINT
+
+# DOUBLE type and values are preserved
+query II
+SELECT bill_depth_mm, typeof(bill_depth_mm)
+  FROM penguins
+ WHERE bill_depth_mm IS NOT NULL
+ ORDER BY bill_depth_mm
+ LIMIT 1
+----
+13.1	DOUBLE
+
+# VARCHAR type and values are preserved
+query TT
+SELECT species, typeof(species)
+  FROM penguins
+ ORDER BY species
+ LIMIT 1 
+----
+Adelie	VARCHAR
+
+# DOUBLE type is preserved when column contains a mix of NULLs and real values
+query IT
+SELECT bill_depth_mm, typeof(bill_depth_mm)
+  FROM penguins
+ ORDER BY bill_depth_mm NULLS LAST
+ LIMIT 1
+----
+13.1	DOUBLE
+
+# NULLs in VARCHAR column cross the boundary correctly
+query I
+SELECT COUNT(*) FROM penguins WHERE sex IS NULL
+----
+11
+
+# No empty strings smuggled in place of NULLs
+query I
+SELECT COUNT(*) FROM penguins WHERE sex = ''
+----
+0
+
+# Exact decimal value survives the boundary
+query R
+SELECT bill_depth_mm
+  FROM penguins
+ WHERE bill_depth_mm IS NOT NULL
+ ORDER BY bill_depth_mm
+ LIMIT 1 
+----
+13.1
+
+# NULL sorts first — boundary does not reorder or drop NULLs
+query R
+SELECT bill_depth_mm
+  FROM penguins
+ ORDER BY bill_depth_mm NULLS FIRST
+ LIMIT 1
+----
+NULL
+
+# No rows are duplicated or dropped
+query I
+SELECT COUNT(*) FROM penguins
+----
+344
+
+# All distinct values survive — none collapsed or corrupted
+query I
+SELECT COUNT(DISTINCT species) FROM penguins
+----
+3
+
+query I
+SELECT COUNT(*) FROM penguins WHERE island = 'Biscoe'
+----
+168
+
+# Aggregation inside ADBC boundary is correct
+query TI
+SELECT species, COUNT(*) AS n 
+  FROM penguins
+ GROUP BY species
+ ORDER BY species
+----
+Adelie	152
+Chinstrap	68
+Gentoo	124
+
+# Two independent ADBC streams can run concurrently
+query I
+SELECT COUNT(*)
+  FROM penguins p1
+  JOIN penguins p2 ON p1.year = p2.year
+----
+39496
+
+# Columns projected in a different order to the schema are correctly mapped
+query TIR
+SELECT species, year, bill_depth_mm
+  FROM penguins
+ ORDER BY species, year, bill_depth_mm
+ NULLS LAST 
+ LIMIT 1
+----
+Adelie	2007	16.7
+
+# Reverse order
+query RIT
+SELECT bill_depth_mm, year, species
+  FROM penguins
+ ORDER BY species, year, bill_depth_mm
+ NULLS LAST
+ LIMIT 1
+----
+16.7	2007	Adelie
+
+# Single column selected, others dropped
+query I
+SELECT year
+  FROM penguins
+ ORDER BY year
+ LIMIT 1
+----
+2007
+
+# Outer query drops columns the inner query returns
+query I
+SELECT COUNT(DISTINCT year)
+  FROM penguins;
+----
+3
+
+# Schema with all-NULL columns
+query II
+SELECT COUNT(*), COUNT(sex)
+  FROM penguins
+ WHERE island = 'Torgersen' 
+   AND year = 2008 
+   AND species = 'Adelie'
+----
+16	16
+
+# VARCHAR values are not truncated crossing the boundary
+query TI
+SELECT island || ' ' || island AS long_island, LENGTH(long_island)
+  FROM penguins
+ ORDER BY island 
+ LIMIT 1
+----
+Biscoe Biscoe	13
+
+# Project the same column twice
+query RR
+SELECT bill_depth_mm AS a, bill_depth_mm AS b 
+  FROM penguins
+ WHERE bill_depth_mm = 13.1
+----
+13.1	13.1
