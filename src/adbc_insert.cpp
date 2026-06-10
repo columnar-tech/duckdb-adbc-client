@@ -266,10 +266,12 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
     }
 
     // Set the schema name to perform the insert on
-    CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
-                                                ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
-                                                gstate.schema_name.c_str(),
-                                                gstate.error.get()));
+    if (!gstate.schema_name.empty()) {
+        CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
+                                                    ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+                                                    gstate.schema_name.c_str(),
+                                                    gstate.error.get()));
+    }
 
     // Set the table name to perform the insert on
     CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
