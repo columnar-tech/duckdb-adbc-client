@@ -42,6 +42,35 @@ public:
           }())) {
         // Create a connection just to test that the URI is valid
         pool->GetConnection();
+
+        auto schemas = FetchSchemaNames();
+        no_schemas = (schemas.size() == 1 && schemas.front() == "");
+    }
+
+    bool NoSchemas() { return no_schemas; }
+
+    string GetExternalSchemaName(const string& schema) {
+        if (no_schemas && schema == "") {
+            return "main";
+        }
+        return schema;
+    }
+
+    string GetInternalSchemaName(const string& schema) {
+        if (no_schemas && schema == "main") {
+            return "";
+        }
+        return schema;
+    }
+
+    string GetDelimitedInternalName(const string& schema, const string& table) {
+        auto quoted_schema = delimiter[0] + GetInternalSchemaName(schema) + delimiter[1];
+        auto quoted_table = delimiter[0] + table + delimiter[1];
+
+        if (no_schemas) {
+            return quoted_table;
+        }
+        return quoted_schema + "." + quoted_table;
     }
 
     unique_lock<std::recursive_mutex> AcquireScopedLock() {
@@ -84,9 +113,7 @@ public:
     string GetDBPath() override {
         return uri;
     }
-    const string &GetDelimiter() const {
-        return delimiter;
-    }
+
     PhysicalOperator &PlanCreateTableAs(ClientContext &context,
                                         PhysicalPlanGenerator &planner,
                                         LogicalCreateTable &op,
@@ -124,6 +151,7 @@ private:
     string delimiter;
     shared_ptr<AdbcConnectionPool> pool;
     case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
+    bool no_schemas;
 };
 
 } // namespace adbc

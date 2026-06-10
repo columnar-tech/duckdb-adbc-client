@@ -39,7 +39,8 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
 
     // Collect all table names
     vector<string> table_names;
-    ForEachCatalog(schema_name.c_str(), ADBC_OBJECT_DEPTH_TABLES, [&table_names](ArrowArray *batch) {
+    auto internal_schema = GetInternalSchemaName(schema_name);
+    ForEachCatalog(internal_schema.c_str(), ADBC_OBJECT_DEPTH_TABLES, [&table_names](ArrowArray *batch) {
         // Get the catalogs
         auto *catalogs = batch;
         auto *catalog_schemas_list = batch->children[1];
@@ -92,10 +93,10 @@ void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaC
 
     // For each schema, create a catalog entry and execute the callback
     for (auto &schema_name : FetchSchemaNames()) {
-        if (auto *entry = GetCatalogEntry(schema_name)) {
+        if (auto *entry = GetCatalogEntry(GetInternalSchemaName(schema_name))) {
             callback(*entry);
         } else {
-            callback(*CreateCatalogEntry(schema_name));
+            callback(*CreateCatalogEntry(GetInternalSchemaName(schema_name)));
         }
     }
 }
@@ -109,21 +110,21 @@ optional_ptr<SchemaCatalogEntry> AdbcCatalog::LookupSchema(CatalogTransaction tr
 
 
     // Return the entry if it already exists
-    const auto &name = schema_lookup.GetEntryName();
-    if (auto *entry = GetCatalogEntry(name)) {
+    auto internal_name = GetInternalSchemaName(schema_lookup.GetEntryName());
+    if (auto *entry = GetCatalogEntry(internal_name)) {
         return entry;
     }
 
     // Throw an exception if the schema doesn't exist
-    if (!SchemaExists(name)) {
+    if (!SchemaExists(internal_name)) {
         if (if_not_found == OnEntryNotFound::RETURN_NULL) {
             return nullptr;
         }
-        throw IOException("Unable to find schema with name: \"%s\"", name);
+        throw IOException("Unable to find schema with name: \"%s\"", schema_lookup.GetEntryName());
     }
 
     // Otherwise add it to the catalog and return it
-    return CreateCatalogEntry(name);
+    return CreateCatalogEntry(internal_name);
 }
 
 PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
@@ -168,9 +169,9 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
         column_names.push_back(col.GetName());
     }
     auto table_name = info->Base().table;
-    auto schema_name = info->Base().schema;
+    auto internal_schema = GetInternalSchemaName(info->Base().schema);
     auto &insert =
-        planner.Make<AdbcInsert>(op, column_types, column_names, table_name, schema_name, pool, InsertMode::CTAS);
+        planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::CTAS);
     insert.children.push_back(plan);
     return insert;
 }
@@ -246,9 +247,9 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
     }
 
     auto table_name = table.name;
-    auto schema_name = table.schema.name;
+    auto internal_schema = GetInternalSchemaName(table.schema.name);
     auto &insert =
-        planner.Make<AdbcInsert>(op, column_types, column_names, table_name, schema_name, pool, InsertMode::APPEND);
+        planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::APPEND);
     insert.children.push_back(*plan);
     return insert;
 }
@@ -289,7 +290,8 @@ void AdbcCatalog::ForEachCatalog(const char *schema_name,
 bool AdbcCatalog::SchemaExists(const string &schema_name) {
     // Check if the schema exists
     bool exists = false;
-    ForEachCatalog(schema_name.c_str(), ADBC_OBJECT_DEPTH_DB_SCHEMAS, [&exists](ArrowArray *batch) {
+    auto internal_schema = GetInternalSchemaName(schema_name);
+    ForEachCatalog(internal_schema.c_str(), ADBC_OBJECT_DEPTH_DB_SCHEMAS, [&exists](ArrowArray *batch) {
         auto *catalog_schemas_list = batch->children[1];
         auto *offsets = reinterpret_cast<const int32_t *>(catalog_schemas_list->buffers[1]);
         for (int64_t i = 0; i < batch->length; ++i) {
@@ -332,7 +334,7 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
 
 SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
     // Look up the entry
-    auto it = owned_schemas.find(schema_name);
+    auto it = owned_schemas.find(GetInternalSchemaName(schema_name));
     if (it != owned_schemas.end()) {
         return it->second.get();
     }
@@ -341,16 +343,17 @@ SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
 
 SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
     // Return the entry if it already exists
-    if (auto *entry = GetCatalogEntry(schema_name)) {
+    auto internal_schema = GetInternalSchemaName(schema_name);
+    if (auto *entry = GetCatalogEntry(internal_schema)) {
         return entry;
     }
 
     // Create and insert the entry
     CreateSchemaInfo info;
-    info.schema = schema_name;
+    info.schema = GetExternalSchemaName(schema_name);
     auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
     auto ptr = schema_entry.get();
-    owned_schemas[schema_name] = std::move(schema_entry);
+    owned_schemas[internal_schema] = std::move(schema_entry);
     return ptr;
 }
 

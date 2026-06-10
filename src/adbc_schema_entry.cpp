@@ -35,13 +35,9 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, con
 
     // Create the entry to be inserted
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-    auto delimiter = adbc_catalog.GetDelimiter();
-    auto schema_name = this->name;
-    auto quoted_schema_name = delimiter[0] + schema_name + delimiter[1];
-    auto quoted_table_name = delimiter[0] + table_name + delimiter[1];
 
     // Bind a SQL statement and use ADBC to retrieve the metadata for the table
-    string sql = StringUtil::Format("SELECT * FROM  %s.%s", quoted_schema_name, quoted_table_name);
+    string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name, table_name);
 
     auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
     auto bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
@@ -86,7 +82,7 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
         return;
     }
 
-    auto schema_name = this->name;
+    auto schema_name = adbc_catalog.GetInternalSchemaName(name);
     auto uri = adbc_catalog.GetDBPath();
 
     // For each ADBC table in the schema, get or create an entry for it
