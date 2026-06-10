@@ -47,23 +47,25 @@ public:
         no_schemas = (schemas.size() == 1 && schemas.front() == "");
     }
 
-    bool NoSchemas() { return no_schemas; }
+    bool NoSchemas() {
+        return no_schemas;
+    }
 
-    string GetExternalSchemaName(const string& schema) {
+    string GetExternalSchemaName(const string &schema) {
         if (no_schemas && schema == "") {
             return "main";
         }
         return schema;
     }
 
-    string GetInternalSchemaName(const string& schema) {
+    string GetInternalSchemaName(const string &schema) {
         if (no_schemas && schema == "main") {
             return "";
         }
         return schema;
     }
 
-    string GetDelimitedInternalName(const string& schema, const string& table) {
+    string GetDelimitedInternalName(const string &schema, const string &table) {
         auto quoted_schema = delimiter[0] + GetInternalSchemaName(schema) + delimiter[1];
         auto quoted_table = delimiter[0] + table + delimiter[1];
 

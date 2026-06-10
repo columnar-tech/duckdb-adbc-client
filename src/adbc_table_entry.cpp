@@ -98,7 +98,8 @@ TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr
     // construct an ADBC scan function using a new connection object for the scan
     auto pooled_connection = adbc_catalog.GetPooledConnection();
     auto internal_schema = adbc_catalog.GetInternalSchemaName(schema.name);
-    auto cardinality = GetTableCardinality(pooled_connection->GetRawConnection(), internal_schema.c_str(), name.c_str());
+    auto cardinality =
+        GetTableCardinality(pooled_connection->GetRawConnection(), internal_schema.c_str(), name.c_str());
 
     string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(schema.name, name);
 
