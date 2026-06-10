@@ -131,14 +131,54 @@ public:
 };
 
 unique_ptr<GlobalSinkState> AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
-    return make_uniq<AdbcInsertGlobalState>(context,
-                                            pool->GetConnection(),
-                                            column_types,
-                                            column_names,
-                                            table_name,
-                                            schema_name,
-                                            insert_mode,
-                                            GetMaxThreadMemory(context));
+
+    auto gstate = make_uniq<AdbcInsertGlobalState>(context,
+                                                   pool->GetConnection(),
+                                                   column_types,
+                                                   column_names,
+                                                   table_name,
+                                                   schema_name,
+                                                   insert_mode,
+                                                   GetMaxThreadMemory(context));
+    // Create the table
+    if (insert_mode == InsertMode::CTAS) {
+        auto *raw_conn = gstate->connection->GetRawConnection();
+
+        Handle<Private::AdbcStatement> statement = {};
+        Handle<ArrowSchema> schema = {};
+        Handle<ArrowArray> array = {};
+        auto &error = gstate->error;
+
+        // Build the Arrow schema from the column types/names
+        auto properties = context.GetClientProperties();
+        ArrowConverter::ToArrowSchema(schema.get(), column_types, column_names, properties);
+
+        // Build an empty ArrowArray matching the schema
+        ArrowArrayInitFromSchema(array.get(), schema.get(), nullptr);
+        ArrowArrayFinishBuilding(array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+
+        // Create a statement to do the CREATE TABLE
+        CHECK_ADBC(AdbcStatementNew(raw_conn, statement.get(), error.get()), IOException);
+
+        // Set the schema name
+        if (!schema_name.empty()) {
+            CHECK_ADBC(AdbcStatementSetOption(statement.get(),
+                                              ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+                                              schema_name.c_str(),
+                                              error.get()),
+                       IOException);
+        }
+
+        // Set the table name
+        CHECK_ADBC(
+            AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), error.get()),
+            IOException);
+
+        // Bind the empty batch — this creates the table schema without inserting rows
+        CHECK_ADBC(AdbcStatementBind(statement.get(), array.get(), schema.get(), error.get()), IOException);
+        CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), nullptr, nullptr, error.get()), IOException);
+    }
+    return gstate;
 }
 
 struct ArrowStreamCollectionData {
@@ -155,20 +195,14 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate, Arrow
     data->scan_state = make_uniq<ColumnDataScanState>();
     gstate.collection.InitializeScan(*data->scan_state);
 
-    // Use DuckDB helpers to retrieve the ArrowSchema
+    // Eagerly create the schema
+    data->cached_schema = make_uniq<ArrowSchema>();
+    auto properties = gstate.context.GetClientProperties();
+    ArrowConverter::ToArrowSchema(data->cached_schema.get(), gstate.column_types, gstate.column_names, properties);
+
+    // Return the cached schema
     stream->get_schema = [](ArrowArrayStream *s, ArrowSchema *out) -> int {
         auto *data = static_cast<ArrowStreamCollectionData *>(s->private_data);
-        auto &gstate = *data->gstate;
-        if (!data->cached_schema) {
-            // Acquire the lock to retrieve the schema
-            lock_guard<mutex> state_lock(gstate.insert_mutex);
-            data->cached_schema = make_uniq<ArrowSchema>();
-            auto properties = gstate.context.GetClientProperties();
-            ArrowConverter::ToArrowSchema(data->cached_schema.get(),
-                                          gstate.column_types,
-                                          gstate.column_names,
-                                          properties);
-        }
         memcpy(out, data->cached_schema.get(), sizeof(ArrowSchema));
         return 0;
     };
@@ -257,13 +291,11 @@ static void AsyncInsert(AdbcInsertGlobalState &gstate) {
     Handle<Private::AdbcStatement> statement = {};
     CHECK_INVALID_STATUS(AdbcStatementNew(connection, statement.get(), gstate.error.get()));
 
-    // Set append mode only if we are doing an INSERT (not a CTAS)
-    if (gstate.insert_mode == InsertMode::APPEND) {
-        CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
-                                                    ADBC_INGEST_OPTION_MODE,
-                                                    ADBC_INGEST_OPTION_MODE_APPEND,
-                                                    gstate.error.get()));
-    }
+    // Set append mode
+    CHECK_INVALID_STATUS(AdbcStatementSetOption(statement.get(),
+                                                ADBC_INGEST_OPTION_MODE,
+                                                ADBC_INGEST_OPTION_MODE_APPEND,
+                                                gstate.error.get()));
 
     // Set the schema name to perform the insert on
     if (!gstate.schema_name.empty()) {
