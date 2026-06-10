@@ -690,6 +690,16 @@ AdbcStatusCode ManagedLibrary::Load(const string_type &library,
     static const std::string kPlatformLibrarySuffix = ".so";
 #endif // defined(__APPLE__)
 
+    if (std::filesystem::path(library).stem().string().find("quack") != std::string::npos) {
+        error_message = "Connecting to Quack is not supported with the ADBC extension";
+        SetError(error, error_message);
+        return ADBC_STATUS_NOT_FOUND;
+    }
+    if (std::filesystem::path(library).stem().string().find("duckdb") != std::string::npos) {
+        error_message = "Connecting to DuckDB is not supported with the ADBC extension";
+        SetError(error, error_message);
+        return ADBC_STATUS_NOT_FOUND;
+    }
     void *handle = dlopen(library.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
         error_message = "Could not load `";

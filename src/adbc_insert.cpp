@@ -243,6 +243,7 @@ static void CreateArrowStreamFromCollection(AdbcInsertGlobalState &gstate, Arrow
     stream->private_data = data.release();
 }
 
+// Invariant: Only modify gstate members that are not modified by DuckDB threads
 static void AsyncInsert(AdbcInsertGlobalState &gstate) {
 
     // Get the ADBC connection

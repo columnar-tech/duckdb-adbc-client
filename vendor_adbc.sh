@@ -83,6 +83,31 @@ namespace Private {" "$f"
     fi
 done
 
+# Add Quack error message
+awk '
+/dlopen\(library\.c_str\(\)/ {
+    print "    if (std::filesystem::path(library).stem().string().find(\"quack\") != std::string::npos) {"
+    print "        error_message = \"Connecting to Quack is not supported with the ADBC extension\";"
+    print "        SetError(error, error_message);"
+    print "        return ADBC_STATUS_NOT_FOUND;"
+    print "    }"
+}
+{ print }
+' "$VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp" > /tmp/adbc_tmp.cpp && mv /tmp/adbc_tmp.cpp "$VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp"
+
+
+# Add DuckDB error message
+awk '
+/dlopen\(library\.c_str\(\)/ {
+    print "    if (std::filesystem::path(library).stem().string().find(\"duckdb\") != std::string::npos) {"
+    print "        error_message = \"Connecting to DuckDB is not supported with the ADBC extension\";"
+    print "        SetError(error, error_message);"
+    print "        return ADBC_STATUS_NOT_FOUND;"
+    print "    }"
+}
+{ print }
+' "$VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp" > /tmp/adbc_tmp.cpp && mv /tmp/adbc_tmp.cpp "$VENDOR_IMPL_PATH/adbc_driver_manager_driver_loading.cpp"
+
 # Vendor Nanoarrow separately is it already uses namespace Private
 cp ./arrow-adbc/c/vendor/nanoarrow/nanoarrow.c $VENDOR_IMPL_PATH/adbc_nanoarrow.cpp
 sed -i 's/nanoarrow.h/adbc-vendor\/adbc_nanoarrow.h/g' $VENDOR_IMPL_PATH/adbc_nanoarrow.cpp
