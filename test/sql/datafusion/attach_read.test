@@ -4,12 +4,6 @@
 
 require adbc
 
-statement ok
-INSTALL httpfs
-
-statement ok
-LOAD httpfs
-
 # Create a datafusion DB with penguins
 statement ok
 ATTACH 'profile://./test/datafusion.toml' AS datafusion_db (TYPE adbc);
@@ -17,7 +11,7 @@ ATTACH 'profile://./test/datafusion.toml' AS datafusion_db (TYPE adbc);
 statement ok
 CREATE TABLE datafusion_db.public.penguins AS (
     SELECT *
-      FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
+      FROM read_csv('./test/penguins.csv', nullstr = 'NA'))
 
 statement ok
 USE datafusion_db.public

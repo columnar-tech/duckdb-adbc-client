@@ -5,18 +5,6 @@
 require adbc
 
 statement ok
-INSTALL sqlite
-
-statement ok
-LOAD sqlite
-
-statement ok
-ATTACH './test/empty.sqlite' AS sqlite_db (TYPE sqlite)
-
-statement ok
-DETACH sqlite_db
-
-statement ok
 ATTACH 'profile://./test/empty.toml' AS sqlite_db (TYPE adbc)
 
 statement ok
@@ -400,6 +388,45 @@ SELECT COUNT(*), SUM(id) FROM bulk_stress
 500001	124999750001
 
 # Clean up
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE integers');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE people');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE nullable');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE even_numbers');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE types_test');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE precision_test');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE big_nums');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE special_strings');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE empty_ctas');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE single_col');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE orders');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE temporal_test');
+
+statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE bulk_stress');
+
 statement ok
 USE memory
 

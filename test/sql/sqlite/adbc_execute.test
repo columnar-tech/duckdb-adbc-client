@@ -5,27 +5,6 @@
 require adbc
 
 statement ok
-INSTALL sqlite
-
-statement ok
-INSTALL httpfs
-
-statement ok
-LOAD httpfs
-
-# Create a SQLite DB for penguins
-statement ok
-ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
-
-statement ok
-CREATE TABLE IF NOT EXISTS sqlite_db.penguins AS (
-    SELECT *
-      FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
-
-statement ok
-DETACH sqlite_db
-
-statement ok
 CREATE OR REPLACE MACRO penguins(query := 'SELECT * FROM penguins') AS TABLE
     SELECT * FROM read_adbc('profile://./test/penguins.toml', query)
 

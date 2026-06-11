@@ -5,9 +5,6 @@
 require adbc
 
 statement ok
-SET threads = 1
-
-statement ok
 ATTACH 'profile://./test/datafusion.toml' AS datafusion_db (TYPE adbc)
 
 statement ok

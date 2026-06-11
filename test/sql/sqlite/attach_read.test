@@ -4,27 +4,6 @@
 
 require adbc
 
-statement ok
-INSTALL sqlite
-
-statement ok
-INSTALL httpfs
-
-statement ok
-LOAD httpfs
-
-# Create a SQLite DB for penguins
-statement ok
-ATTACH './test/penguins.sqlite' AS sqlite_db (TYPE sqlite);
-
-statement ok
-CREATE OR REPLACE TABLE sqlite_db.penguins AS (
-    SELECT *
-      FROM read_csv('https://blobs.duckdb.org/data/penguins.csv', nullstr = 'NA'))
-
-statement ok
-DETACH sqlite_db
-
 # Now attach to the sqlite database
 statement ok
 ATTACH 'profile://./test/penguins.toml' AS sqlite_db (TYPE adbc);
