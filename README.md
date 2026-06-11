@@ -30,16 +30,9 @@ LOAD adbc;
   cd duckdb-adbc-client
   # Build the extension from source
   GEN=ninja make release
-  # Build DuckDB from source
-  cd duckdb
-  GEN=ninja make release
-  # Run DuckDB in unsigned mode to load untrusted extensions
-  ./build/release/duckdb -unsigned
+  # Run DuckDB with the ADBC extension auto-loaded 
+  ./build/release/duckdb 
   ```
-  
-  ```sql
-LOAD '../build/release/extension/adbc/adbc.duckdb_extension';
-```
   
 </details>
 

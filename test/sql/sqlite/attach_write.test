@@ -1,5 +1,5 @@
 # name: test/sql/sqlite/attach_write.test
-# description: Test general ATTACH functionality (reads + writes) 
+# description: Test general ATTACH functionality (reads + writes)
 # group: [sqlite]
 
 require adbc
