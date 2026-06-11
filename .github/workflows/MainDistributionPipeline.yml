@@ -80,24 +80,24 @@ jobs:
           # Use native PowerShell calling semantics and folder parsing
           & .\build\release\test\unittest.exe test\
       
-  deploy-v1-4:
-    name: Deploy extension binaries (v1.4)
-    needs: [duckdb-build-v1-4, test]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.4-andium
-    secrets: inherit
-    with:
-      duckdb_version: v1.4-andium
-      ci_tools_version: v1.4-andium
-      extension_name: adbc
+  # deploy-v1-4:
+  #   name: Deploy extension binaries (v1.4)
+  #   needs: [duckdb-build-v1-4, test]
+  #   if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+  #   uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.4-andium
+  #   secrets: inherit
+  #   with:
+  #     duckdb_version: v1.4-andium
+  #     ci_tools_version: v1.4-andium
+  #     extension_name: adbc
 
-  deploy-v1-5:
-    name: Deploy extension binaries (v1.5)
-    needs: [duckdb-build-v1-5, test]
-    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
-    secrets: inherit
-    with:
-      duckdb_version: v1.5-variegata
-      ci_tools_version: v1.5-variegata
-      extension_name: adbc
+  # deploy-v1-5:
+  #   name: Deploy extension binaries (v1.5)
+  #   needs: [duckdb-build-v1-5, test]
+  #   if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+  #   uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
+  #   secrets: inherit
+  #   with:
+  #     duckdb_version: v1.5-variegata
+  #     ci_tools_version: v1.5-variegata
+  #     extension_name: adbc
