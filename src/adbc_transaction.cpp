@@ -23,7 +23,6 @@
 #define MAX_OPTION_LEN                                                                                                 \
     (sizeof(ADBC_OPTION_VALUE_ENABLED) > sizeof(ADBC_OPTION_VALUE_DISABLED) ? sizeof(ADBC_OPTION_VALUE_ENABLED)        \
                                                                             : sizeof(ADBC_OPTION_VALUE_DISABLED))
-
 namespace duckdb {
 namespace adbc {
 
@@ -42,18 +41,23 @@ Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
     char option_value[MAX_OPTION_LEN] = {0};
     size_t option_length = MAX_OPTION_LEN;
     Handle<Private::AdbcError> error = {};
-    CHECK_ADBC(AdbcConnectionGetOption(adbc_catalog.GetPooledConnection()->GetRawConnection(),
-                                       ADBC_CONNECTION_OPTION_AUTOCOMMIT,
-                                       option_value,
-                                       &option_length,
-                                       error.get()),
-               IOException);
 
-    bool auto_commit_enabled = (strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0);
+    auto adbc_status = AdbcConnectionGetOption(adbc_catalog.GetPooledConnection()->GetRawConnection(),
+                                               ADBC_CONNECTION_OPTION_AUTOCOMMIT,
+                                               option_value,
+                                               &option_length,
+                                               error.get());
 
-    if (!auto_commit_enabled) {
-        throw NotImplementedException("Running with the auto-commit option turned off is not yet supported "
-                                      "with the ADBC extension");
+    // Not found -> AUTOCOMMIT is on and we're good
+    if (adbc_status == ADBC_STATUS_NOT_FOUND) {
+    } else {
+        // Check it
+        CHECK_ADBC(adbc_status, IOException);
+        bool auto_commit_enabled = (strcmp(option_value, ADBC_OPTION_VALUE_ENABLED) == 0);
+        if (!auto_commit_enabled) {
+            throw NotImplementedException("Running with the auto-commit option turned off is not yet supported "
+                                          "with the ADBC extension");
+        }
     }
 
     // Create the transaction

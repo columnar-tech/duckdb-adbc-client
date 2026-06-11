@@ -131,7 +131,6 @@ public:
 };
 
 unique_ptr<GlobalSinkState> AdbcInsert::GetGlobalSinkState(ClientContext &context) const {
-
     auto gstate = make_uniq<AdbcInsertGlobalState>(context,
                                                    pool->GetConnection(),
                                                    column_types,
@@ -143,19 +142,37 @@ unique_ptr<GlobalSinkState> AdbcInsert::GetGlobalSinkState(ClientContext &contex
     // Create the table
     if (insert_mode == InsertMode::CTAS) {
         auto *raw_conn = gstate->connection->GetRawConnection();
-
         Handle<Private::AdbcStatement> statement = {};
         Handle<ArrowSchema> schema = {};
-        Handle<ArrowArray> array = {};
+        Handle<ArrowArrayStream> stream = {};
         auto &error = gstate->error;
 
         // Build the Arrow schema from the column types/names
         auto properties = context.GetClientProperties();
         ArrowConverter::ToArrowSchema(schema.get(), column_types, column_names, properties);
 
-        // Build an empty ArrowArray matching the schema
-        ArrowArrayInitFromSchema(array.get(), schema.get(), nullptr);
-        ArrowArrayFinishBuilding(array.get(), NANOARROW_VALIDATION_LEVEL_NONE, nullptr);
+        // Manually wire up a minimal ArrowArrayStream backed by the schema.
+        // The stream holds a raw pointer to the schema so it can serve get_schema,
+        // then immediately returns end-of-stream (0) on get_next.
+        stream->private_data = schema.get();
+
+        stream->get_schema = [](ArrowArrayStream *s, ArrowSchema *out) -> int {
+            auto *src = static_cast<ArrowSchema *>(s->private_data);
+            ArrowSchemaMove(src, out);
+            return 0;
+        };
+
+        stream->get_next = [](ArrowArrayStream *, ArrowArray *out) -> int {
+            out->release = nullptr; // signals end-of-stream
+            return 0;
+        };
+
+        stream->get_last_error = [](ArrowArrayStream *) -> const char * { return nullptr; };
+
+        stream->release = [](ArrowArrayStream *s) {
+            s->private_data = nullptr;
+            s->release = nullptr;
+        };
 
         // Create a statement to do the CREATE TABLE
         CHECK_ADBC(AdbcStatementNew(raw_conn, statement.get(), error.get()), IOException);
@@ -174,8 +191,8 @@ unique_ptr<GlobalSinkState> AdbcInsert::GetGlobalSinkState(ClientContext &contex
             AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), error.get()),
             IOException);
 
-        // Bind the empty batch — this creates the table schema without inserting rows
-        CHECK_ADBC(AdbcStatementBind(statement.get(), array.get(), schema.get(), error.get()), IOException);
+        // Bind the empty stream — this creates the table schema without inserting rows
+        CHECK_ADBC(AdbcStatementBindStream(statement.get(), stream.get(), error.get()), IOException);
         CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), nullptr, nullptr, error.get()), IOException);
     }
     return gstate;

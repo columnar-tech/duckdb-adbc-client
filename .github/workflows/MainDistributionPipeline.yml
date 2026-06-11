@@ -60,7 +60,9 @@ jobs:
       - uses: columnar-tech/setup-dbc@v1
       
       - name: Install ADBC Drivers
-        run: dbc install sqlite
+        run: |
+          dbc install sqlite
+          dbc install datafusion 
       
       - name: Build
         shell: bash
