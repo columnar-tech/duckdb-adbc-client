@@ -78,7 +78,9 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
         Handle<ArrowArrayStream> stream = {};
         int64_t rows_affected = 0;
         CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, error.get()), BinderException);
-        stream->get_schema(stream.get(), schema);
+        if (stream->get_schema(stream.get(), schema) != 0) {
+            throw BinderException("Failed to get schema from ADBC stream");
+        }
         stream.reset();
         adbc_arrow_stream_factory->ResetStatement();
     } else {
