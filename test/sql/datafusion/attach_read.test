@@ -5,9 +5,6 @@
 require adbc
 
 statement ok
-INSTALL sqlite
-
-statement ok
 INSTALL httpfs
 
 statement ok
