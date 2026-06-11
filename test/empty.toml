@@ -1,0 +1,5 @@
+profile_version = 1
+driver = "sqlite"
+
+[Options]
+uri = "./test/empty.sqlite"

@@ -1,0 +1,407 @@
+# name: test/sql/sqlite/attach_write.test
+# description: Test general ATTACH functionality (reads + writes) 
+# group: [sqlite]
+
+require adbc
+
+statement ok
+INSTALL sqlite
+
+statement ok
+LOAD sqlite
+
+statement ok
+ATTACH './test/empty.sqlite' AS sqlite_db (TYPE sqlite)
+
+statement ok
+DETACH sqlite_db
+
+statement ok
+ATTACH 'profile://./test/empty.toml' AS sqlite_db (TYPE adbc)
+
+statement ok
+USE sqlite_db;
+
+# A freshly attached DB has no tables
+query I
+SHOW TABLES
+----
+
+# CTAS works
+statement ok
+CREATE TABLE integers AS SELECT 1 AS a, 2 AS b, 3 AS c
+
+# Correct output
+query III
+SELECT a, b, c FROM integers
+----
+1	2	3
+
+# CTAS from a VALUES clause
+statement ok
+CREATE TABLE people AS
+    SELECT *
+      FROM (VALUES ('Alice', 30), ('Bob', 25), ('Charlie', 35))
+           t(name, age)
+
+# Correct output
+query TI
+SELECT name, age FROM people ORDER BY age
+----
+Bob	25
+Alice	30
+Charlie	35
+
+# CTAS table exists
+query I
+SHOW TABLES
+----
+integers
+people
+
+# Correct types (all BIGINT)
+query TT
+SELECT column_name, column_type
+  FROM (DESCRIBE integers)
+ ORDER BY column_name
+----
+a	BIGINT
+b	BIGINT
+c	BIGINT
+
+# Correct types
+query TT
+SELECT column_name, column_type
+  FROM (DESCRIBE people)
+ ORDER BY column_name
+----
+age	BIGINT
+name	VARCHAR
+
+# Insert on CTAS table
+statement ok
+INSERT INTO people VALUES ('Diana', 28)
+
+# Correct count
+query I
+SELECT COUNT(*) FROM people
+----
+4
+
+# Query works too
+query TI
+SELECT name, age FROM people WHERE name = 'Diana'
+----
+Diana	28
+
+# Insert multiple rows
+statement ok
+INSERT INTO people VALUES ('Eve', 22), ('Frank', 45), ('Grace', 31)
+
+# Correct row count
+query I
+SELECT COUNT(*) FROM people
+----
+7
+
+# CTAS with multiple INSERTS 
+statement ok
+CREATE TABLE nullable AS SELECT 0::BIGINT AS id, 'foo'::VARCHAR AS val, 2.7::DOUBLE AS num
+
+statement ok
+INSERT INTO nullable VALUES (1, 'hello', 3.14)
+
+statement ok
+INSERT INTO nullable VALUES (2, NULL, NULL)
+
+statement ok
+INSERT INTO nullable VALUES (3, 'world', NULL)
+
+# NULLs are not turned into empty strings or zeros
+query I
+SELECT COUNT(*) FROM nullable WHERE val IS NULL
+----
+1
+
+# Correct NULL count
+query I
+SELECT COUNT(*) FROM nullable WHERE num IS NULL
+----
+2
+
+# No empty-string smuggling in place of NULLs
+query I
+SELECT COUNT(*) FROM nullable WHERE val = ''
+----
+0
+
+# CTAS
+statement ok
+CREATE TABLE even_numbers AS SELECT 0 AS n
+
+# Bulk INSERT
+statement ok
+INSERT INTO even_numbers SELECT i * 2 AS n FROM range(10) t(i)
+
+# Correct row count
+query I
+SELECT COUNT(*) FROM even_numbers
+----
+11
+
+# Correct query result
+query II
+SELECT MIN(n), MAX(n) FROM even_numbers
+----
+0	18
+
+# Test CTAS with types
+statement ok
+CREATE TABLE types_test AS
+    SELECT
+        42::BIGINT          AS big_int,
+        3.14159::DOUBLE     AS dbl,
+        'hello'::VARCHAR    AS str,
+        true::BOOLEAN       AS flag
+
+# Correct types
+query IIIT
+SELECT typeof(big_int), typeof(dbl), typeof(str), typeof(flag)
+  FROM types_test
+----
+BIGINT	DOUBLE	VARCHAR	BIGINT
+
+# BOOLEAN survives as 1 (SQLite stores it as integer)
+query IRI
+SELECT big_int, dbl, flag
+  FROM types_test
+----
+42	3.14159	1
+
+# Double precision
+statement ok
+CREATE TABLE precision_test AS
+    SELECT 1.23456789012345::DOUBLE AS v
+
+# Correct precision
+query R
+SELECT v FROM precision_test
+----
+1.23456789012345
+
+# Test BIGINT ranges
+statement ok
+CREATE TABLE big_nums AS
+    SELECT  9223372036854775807::BIGINT AS max_val,
+           (-9223372036854775807::BIGINT -1) AS min_val
+
+# Correct result
+query II
+SELECT max_val, min_val FROM big_nums
+----
+9223372036854775807	-9223372036854775808
+
+# Weird strings
+statement ok
+CREATE TABLE special_strings AS
+    SELECT * FROM (VALUES
+        ('it''s a test'),
+        ('line1\nline2'),
+        ('tab\there'),
+        ('emoji 🦆'),
+        (''),
+        (NULL)
+    ) t(s)
+
+# Empty string and NULL are distinct
+query I
+SELECT COUNT(*) FROM special_strings WHERE s IS NULL
+----
+1
+
+# Empty string
+query I
+SELECT COUNT(*) FROM special_strings WHERE s = ''
+----
+1
+
+# Emojis
+query T
+SELECT s FROM special_strings WHERE s LIKE '%🦆%'
+----
+emoji 🦆
+
+# Empty CTAS
+statement ok
+CREATE TABLE empty_ctas AS
+    SELECT 1::BIGINT AS id, 'x'::VARCHAR AS label, 3.14::DOUBLE AS score
+     WHERE 1=0
+
+# Empty row count
+query I
+SELECT COUNT(*) FROM empty_ctas
+----
+0
+
+# INSERT won't work on inferred BIGINT columns
+statement error
+INSERT INTO empty_ctas VALUES (1, 'hello', 7.5), (2, 'world', 8.25)
+----
+
+# Empty CTAS 
+statement ok
+CREATE TABLE single_col AS SELECT 42::BIGINT AS x WHERE 1=0
+
+# No returned rows
+query I
+SELECT COUNT(*) FROM single_col
+----
+0
+
+# Inferred BIGINT
+query TT
+SELECT column_name, column_type FROM (DESCRIBE single_col)
+----
+x	BIGINT
+
+# Insert with BIGINT
+statement ok
+INSERT INTO single_col VALUES (1), (2), (3)
+
+# Correct query result
+query I
+SELECT SUM(x) FROM single_col
+----
+6
+
+# CTAS on existing table should fail
+statement error 
+CREATE TABLE integers AS SELECT 99 AS a, 99 AS b, 99 AS c
+----
+
+# Original data must be untouched after failed CTAS
+query III
+SELECT a, b, c FROM integers
+----
+1	2	3
+
+
+# Data persists after DETACH + ATTACH
+statement ok
+USE memory
+
+statement ok
+DETACH sqlite_db
+
+statement ok
+ATTACH 'profile://./test/empty.toml' AS db2 (TYPE adbc)
+
+statement ok
+USE db2.main
+
+# All tables survive
+query I
+SHOW TABLES
+----
+big_nums
+empty_ctas
+even_numbers
+integers
+nullable
+people
+precision_test
+single_col
+special_strings
+types_test
+
+# Table retains its rows after detach/re-attach
+query I
+SELECT COUNT(*) FROM integers 
+----
+1
+
+# Schema of empty_ctas is preserved (Inferred dynamically from populated data now)
+query TT
+SELECT column_name, column_type
+  FROM (DESCRIBE empty_ctas)
+ ORDER BY column_name
+----
+id	BIGINT
+label	BIGINT	
+score	BIGINT
+
+# Row counts survive
+query I
+SELECT COUNT(*) FROM people
+----
+7
+
+query I
+SELECT COUNT(*) FROM even_numbers
+----
+11
+
+# NULL preservation survives detach/re-attach
+query I
+SELECT COUNT(*) FROM nullable WHERE val IS NULL
+----
+1
+
+# CTAS another ADBC table
+statement ok
+CREATE TABLE orders AS
+    SELECT * FROM (VALUES (1, 'Alice', 100), (2, 'Bob', 200), (3, 'Alice', 50))
+                  t(order_id, customer, amount)
+
+# Queries on multiple ADBC tables
+query TI
+SELECT p.name, SUM(o.amount) AS total
+  FROM people p
+  JOIN orders o ON p.name = o.customer
+ GROUP BY p.name
+ ORDER BY p.name
+----
+Alice	150
+Bob	200
+
+# Data/time testing
+statement ok
+CREATE TABLE temporal_test AS 
+    SELECT '2026-06-11'::DATE AS date_col, 
+           '2026-06-11 10:00:00'::TIMESTAMP AS ts_col
+
+# Conversions to VARCHAR
+query TT
+SELECT column_name, column_type 
+  FROM (DESCRIBE temporal_test) 
+ ORDER BY column_name
+----
+date_col	VARCHAR
+ts_col	VARCHAR
+
+# Correct query result
+query TT
+SELECT date_col, ts_col FROM temporal_test
+----
+2026-06-11	2026-06-11T10:00:00.000000
+
+# Bulk insert
+statement ok
+CREATE TABLE bulk_stress AS SELECT 1 AS id
+
+# Insert many rows
+statement ok
+INSERT INTO bulk_stress SELECT * FROM range(500000)
+
+# Correct query result
+query II
+SELECT COUNT(*), SUM(id) FROM bulk_stress
+----
+500001	124999750001
+
+# Clean up
+statement ok
+USE memory
+
+statement ok
+DETACH db2
