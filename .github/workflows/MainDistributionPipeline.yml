@@ -9,23 +9,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  duckdb-build-v1-4:
-    name: Build extension binaries (v1.4)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
-    with:
-      duckdb_version: v1.4-andium
-      ci_tools_version: v1.4-andium
-      extension_name: adbc
-      skip_tests: true
+  # duckdb-build-v1-4:
+  #   name: Build extension binaries (v1.4)
+  #   uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
+  #   with:
+  #     duckdb_version: v1.4-andium
+  #     ci_tools_version: v1.4-andium
+  #     extension_name: adbc
+  #     skip_tests: true
 
-  duckdb-build-v1-5:
-    name: Build extension binaries (v1.5)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
-    with:
-      duckdb_version: v1.5-variegata
-      ci_tools_version: v1.5-variegata
-      extension_name: adbc
-      skip_tests: true
+  # duckdb-build-v1-5:
+  #   name: Build extension binaries (v1.5)
+  #   uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+  #   with:
+  #     duckdb_version: v1.5-variegata
+  #     ci_tools_version: v1.5-variegata
+  #     extension_name: adbc
+  #     skip_tests: true
 
   code-quality-check:
     name: Code Quality Check
