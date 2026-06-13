@@ -209,7 +209,7 @@ To push down projections or predicates, you can directly call `read_adbc` with a
 
 ```sql
 D CREATE MACRO read_mydb(query) AS TABLE SELECT * FROM read_adbc('profile://mydb', query);
-D SELECT inventor FROM read_mydb('SELECT inventor FROM games WHERE name = ''Monopoloy''')
+D SELECT inventor FROM read_mydb('SELECT inventor FROM games WHERE name = ''Monopoly''')
 ┌─────────────────────┐
 │      inventor       │
 │       varchar       │
