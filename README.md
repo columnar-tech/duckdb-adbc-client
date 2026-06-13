@@ -199,6 +199,10 @@ D CALL adbc_clear_cache();
 
 ## Limitations
 
+### Autocommit Mode
+
+The ADBC extension only supports autocommit mode. In this mode, queries take effect immediately upon execution. 
+
 ### Projection and Predicate Pushdown
 
 The ADBC extension does not currently perform predicate or projection pushdown for attached ADBC tables.
