@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include <memory>
 
 namespace duckdb {
 namespace adbc {
@@ -48,7 +49,7 @@ string AdbcCatalog::FetchCatalogName() {
     }
 
     // Allocate space for the catalog name
-    auto buffer = make_uniq<char[]>(length);
+    auto buffer = std::make_unique<char[]>(length);
     CHECK_ADBC(AdbcConnectionGetOption(connection->GetRawConnection(),
                                        ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
                                        buffer.get(),
