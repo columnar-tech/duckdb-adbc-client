@@ -199,6 +199,33 @@ D CALL adbc_clear_cache();
 
 ## Limitations
 
+### Autocommit Mode
+
+The ADBC extension only supports autocommit mode. In this mode, queries take effect immediately upon execution. 
+
+### Projection and Predicate Pushdown
+
+The ADBC extension does not currently perform predicate or projection pushdown for attached ADBC tables.
+
+See [Issue #1](https://github.com/columnar-tech/duckdb-adbc-client/issues/1) and [Issue #2](https://github.com/columnar-tech/duckdb-adbc-client/issues/2) for more details.
+
+To push down projections or predicates, you can directly call `read_adbc` with a SQL query.
+
+```sql
+D CREATE MACRO read_mydb(query) AS TABLE SELECT * FROM read_adbc('profile://mydb', query);
+D SELECT inventor FROM read_mydb('SELECT inventor FROM games WHERE name = ''Monopoly''')
+┌─────────────────────┐
+│      inventor       │
+│       varchar       │
+├─────────────────────│
+│ Elizabeth Magie     │
+└─────────────────────┘
+```
+
+### Connecting to DuckDB or Quack
+
+The ADBC extension does not currently support connecting to another DuckDB database using the DuckDB or Quack ADBC drivers.
+
 ### Concurrency Within a Single Process
 
 The ADBC extension does not currently support concurrent ADBC operations within a single process.
