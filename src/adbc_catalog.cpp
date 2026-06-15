@@ -33,6 +33,33 @@ unique_ptr<AdbcPooledConnection> AdbcCatalog::GetPooledConnection() {
     return pool->GetConnection();
 }
 
+string AdbcCatalog::FetchCatalogName() {
+    // Lock the catalog
+    auto catalog_lock = AcquireScopedLock();
+    Handle<Private::AdbcError> error = {};
+
+    // Allocate a stack buffer for the catalog name
+    char catalog_name[4096] = {'\0'};
+    size_t length = sizeof(catalog_name);
+
+    // Use GetOption(...) to fetch the catalog name
+    auto connection = pool->GetConnection();
+    auto option_status = AdbcConnectionGetOption(connection->GetRawConnection(),
+                                                 ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
+                                                 catalog_name,
+                                                 &length,
+                                                 error.get());
+
+    // Not supported by all drivers
+    if (option_status == ADBC_STATUS_NOT_FOUND) {
+        return "";
+    }
+
+    // Check the status and return
+    CHECK_ADBC(option_status, BinderException);
+    return catalog_name;
+}
+
 vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
     // Lock the catalog
     auto catalog_lock = AcquireScopedLock();
@@ -74,6 +101,7 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
         }
         return true;
     });
+
     return table_names;
 }
 
@@ -266,7 +294,7 @@ void AdbcCatalog::ForEachCatalog(const char *schema_name,
     Handle<ArrowArrayStream> stream = {};
     CHECK_ADBC(AdbcConnectionGetObjects(connection->GetRawConnection(),
                                         depth,
-                                        nullptr,
+                                        catalog_name.empty() ? nullptr : catalog_name.c_str(),
                                         schema_name,
                                         nullptr,
                                         nullptr,

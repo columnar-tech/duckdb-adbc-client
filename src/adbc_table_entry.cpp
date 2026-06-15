@@ -22,6 +22,7 @@ namespace duckdb {
 namespace adbc {
 
 static optional_idx GetTableCardinality(Private::AdbcConnection *connection,
+                                        const char *catalog_name,
                                         const char *schema_name,
                                         const char *table_name) {
     Handle<Private::AdbcError> error = {};
@@ -98,8 +99,11 @@ TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr
     // construct an ADBC scan function using a new connection object for the scan
     auto pooled_connection = adbc_catalog.GetPooledConnection();
     auto internal_schema = adbc_catalog.GetInternalSchemaName(schema.name);
-    auto cardinality =
-        GetTableCardinality(pooled_connection->GetRawConnection(), internal_schema.c_str(), name.c_str());
+    auto catalog_name = adbc_catalog.GetCatalogName();
+    auto cardinality = GetTableCardinality(pooled_connection->GetRawConnection(),
+                                           catalog_name.empty() ? nullptr : catalog_name.c_str(),
+                                           internal_schema.c_str(),
+                                           name.c_str());
 
     string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(schema.name, name);
 

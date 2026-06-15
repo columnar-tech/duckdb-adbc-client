@@ -35,17 +35,25 @@ class AdbcCatalog : public Catalog {
 public:
     explicit AdbcCatalog(AttachedDatabase &db, ClientContext &context, const string &uri, const string &delimiter)
         : Catalog(db), context(context), uri(uri), delimiter(delimiter),
-          pool(make_shared_ptr<AdbcConnectionPool>(uri, [&context]() {
-              Value option_value;
-              context.TryGetCurrentSetting("adbc_connection_pool_size", option_value);
-              return option_value.GetValue<int64_t>();
-          }())) {
+          pool(make_shared_ptr<AdbcConnectionPool>(uri,
+                                                   [&context]() {
+                                                       Value option_value;
+                                                       context.TryGetCurrentSetting("adbc_connection_pool_size",
+                                                                                    option_value);
+                                                       return option_value.GetValue<int64_t>();
+                                                   }())),
+          catalog_name(FetchCatalogName()) {
+
         auto schemas = FetchSchemaNames();
         no_schemas = (schemas.size() == 1 && schemas.front() == "");
     }
 
     bool NoSchemas() {
         return no_schemas;
+    }
+
+    string GetCatalogName() const {
+        return catalog_name;
     }
 
     string GetExternalSchemaName(const string &schema) {
@@ -138,6 +146,7 @@ public:
 private:
     void ForEachCatalog(const char *schema_name, int depth, const std::function<bool(ArrowArray *)> &callback);
     bool SchemaExists(const string &schema_name);
+    string FetchCatalogName();
     vector<string> FetchSchemaNames();
     SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
     SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
@@ -149,6 +158,7 @@ private:
     string uri;
     string delimiter;
     shared_ptr<AdbcConnectionPool> pool;
+    string catalog_name;
     case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
     bool no_schemas;
 };
