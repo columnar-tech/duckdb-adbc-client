@@ -5,11 +5,15 @@
 ![catalog](./design/catalog.png)
 
 An `ATTACH` command creates an ADBC catalog, which allows SQL statements to operate against the ADBC database as if it were local to DuckDB.
-SQL statements on ADBC tables create catalog requests (schema/table lookups, connection requests, etc.), which the extension serializes using a `std::recursive_mutex`. 
+SQL statements on ADBC tables create catalog requests (schema/table lookups, connection requests, etc.), which the extension runs concurrently,
+serializing access to any shared state using a `std::mutex`. 
+
 To avoid redundant requests to the remote ADBC database, the catalog performs caching at two levels:
 
 1. Previously accessed schema/table metadata is cached in the ADBC catalog.
 2. Previously used connections are returned to a connection pool to serve future connection requests.
+
+When a user executes a command that requests all catalog information (i.e., `SHOW ALL TABLES`), the ADBC extension will query the ADBC database for any metadata that misses the cache.
 
 ## ADBC Inserts
 
