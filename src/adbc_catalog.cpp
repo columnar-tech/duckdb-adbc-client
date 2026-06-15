@@ -33,27 +33,29 @@ unique_ptr<AdbcPooledConnection> AdbcCatalog::GetPooledConnection() {
 
 string AdbcCatalog::FetchCatalogName() {
 
-    // Allocate a stack buffer for the catalog name
-    Handle<Private::AdbcError> error = {};
-    char catalog_name[4096] = {'\0'};
-    size_t length = sizeof(catalog_name);
-
     // Use GetOption(...) to fetch the catalog name
+    Handle<Private::AdbcError> error = {};
+    size_t length = 0;
     auto connection = pool->GetConnection();
-    auto option_status = AdbcConnectionGetOption(connection->GetRawConnection(),
-                                                 ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
-                                                 catalog_name,
-                                                 &length,
-                                                 error.get());
 
-    // Not supported by all drivers
-    if (option_status == ADBC_STATUS_NOT_FOUND) {
+    // Exit if there's no support for this option
+    if (AdbcConnectionGetOption(connection->GetRawConnection(),
+                                ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
+                                nullptr,
+                                &length,
+                                error.get()) == ADBC_STATUS_NOT_FOUND) {
         return "";
     }
 
-    // Check the status and return
-    CHECK_ADBC(option_status, BinderException);
-    return catalog_name;
+    // Allocate space for the catalog name
+    auto buffer = make_uniq<char[]>(length);
+    CHECK_ADBC(AdbcConnectionGetOption(connection->GetRawConnection(),
+                                       ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
+                                       buffer.get(),
+                                       &length,
+                                       error.get()),
+               BinderException);
+    return string(buffer.get());
 }
 
 vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
