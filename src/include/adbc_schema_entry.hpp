@@ -92,6 +92,7 @@ public:
     }
 
 private:
+    std::mutex tables_mutex;
     case_insensitive_map_t<unique_ptr<CatalogEntry>> owned_tables;
 };
 

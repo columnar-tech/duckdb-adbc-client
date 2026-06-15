@@ -94,7 +94,6 @@ AdbcTableEntry::AdbcTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, Cre
 TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
 
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-    auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
     // construct an ADBC scan function using a new connection object for the scan
     auto pooled_connection = adbc_catalog.GetPooledConnection();

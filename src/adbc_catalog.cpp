@@ -28,17 +28,13 @@ namespace duckdb {
 namespace adbc {
 
 unique_ptr<AdbcPooledConnection> AdbcCatalog::GetPooledConnection() {
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
     return pool->GetConnection();
 }
 
 string AdbcCatalog::FetchCatalogName() {
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
-    Handle<Private::AdbcError> error = {};
 
     // Allocate a stack buffer for the catalog name
+    Handle<Private::AdbcError> error = {};
     char catalog_name[4096] = {'\0'};
     size_t length = sizeof(catalog_name);
 
@@ -61,8 +57,6 @@ string AdbcCatalog::FetchCatalogName() {
 }
 
 vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
 
     // Collect all table names
     vector<string> table_names;
@@ -106,19 +100,12 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
 }
 
 void AdbcCatalog::ClearCache() {
-
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
-
     // Delete all schemas
+    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
     owned_schemas.clear();
 }
 
 void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
-
     // For each schema, create a catalog entry and execute the callback
     for (auto &schema_name : FetchSchemaNames()) {
         if (auto *entry = GetCatalogEntry(GetInternalSchemaName(schema_name))) {
@@ -132,10 +119,6 @@ void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaC
 optional_ptr<SchemaCatalogEntry> AdbcCatalog::LookupSchema(CatalogTransaction transaction,
                                                            const EntryLookupInfo &schema_lookup,
                                                            OnEntryNotFound if_not_found) {
-
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
-
 
     // Return the entry if it already exists
     auto internal_name = GetInternalSchemaName(schema_lookup.GetEntryName());
@@ -159,9 +142,6 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
                                                  PhysicalPlanGenerator &planner,
                                                  LogicalCreateTable &op,
                                                  PhysicalOperator &plan) {
-
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
 
     // Ensure no IF NOT EXISTS or REPLACE qualifiers are included in the CTAS
     auto &info = op.info;
@@ -208,9 +188,6 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
                                           PhysicalPlanGenerator &planner,
                                           LogicalInsert &op,
                                           optional_ptr<PhysicalOperator> plan) {
-
-    // Lock the catalog
-    auto catalog_lock = AcquireScopedLock();
 
     // Ensure no RETURNING clause or ON CONFLICT
     if (op.return_chunk) {
@@ -282,14 +259,12 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
     return insert;
 }
 
-// Private methods below assume the catalog lock is held
 void AdbcCatalog::ForEachCatalog(const char *schema_name,
                                  int depth,
                                  const std::function<bool(ArrowArray *)> &callback) {
 
-    auto connection = pool->GetConnection();
-
     // Retrieve the catalog info from the ADBC connection
+    auto connection = pool->GetConnection();
     Handle<Private::AdbcError> error = {};
     Handle<ArrowArrayStream> stream = {};
     CHECK_ADBC(AdbcConnectionGetObjects(connection->GetRawConnection(),
@@ -362,6 +337,7 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
 
 SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
     // Look up the entry
+    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
     auto it = owned_schemas.find(GetInternalSchemaName(schema_name));
     if (it != owned_schemas.end()) {
         return it->second.get();
@@ -371,9 +347,11 @@ SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
 
 SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
     // Return the entry if it already exists
+    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
     auto internal_schema = GetInternalSchemaName(schema_name);
-    if (auto *entry = GetCatalogEntry(internal_schema)) {
-        return entry;
+    auto it = owned_schemas.find(internal_schema);
+    if (it != owned_schemas.end()) {
+        return it->second.get();
     }
 
     // Create and insert the entry

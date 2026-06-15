@@ -80,10 +80,6 @@ public:
         return quoted_schema + "." + quoted_table;
     }
 
-    unique_lock<std::recursive_mutex> AcquireScopedLock() {
-        return unique_lock(mutex);
-    }
-
     unique_ptr<AdbcPooledConnection> GetPooledConnection();
     vector<string> FetchTableNames(const string &schema_name);
     void Initialize(bool load_builtin) override {
@@ -153,12 +149,12 @@ private:
     bool ContainsAdbcReads(PhysicalOperator &op);
 
 private:
-    std::recursive_mutex mutex;
     ClientContext &context;
     string uri;
     string delimiter;
     shared_ptr<AdbcConnectionPool> pool;
     string catalog_name;
+    std::mutex schemas_mutex;
     case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
     bool no_schemas;
 };

@@ -27,10 +27,15 @@ namespace adbc {
 
 CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, const string &table_name) {
 
-    // Return the entry if it already exists
-    auto it = owned_tables.find(table_name);
-    if (it != owned_tables.end()) {
-        return it->second.get();
+    // Check if the table exists
+    {
+        std::unique_lock<std::mutex> tables_lock(tables_mutex);
+
+        // Return the entry if it already exists
+        auto it = owned_tables.find(table_name);
+        if (it != owned_tables.end()) {
+            return it->second.get();
+        }
     }
 
     // Create the entry to be inserted
@@ -51,18 +56,27 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, con
     }
     table_info->internal = false;
 
-    // Insert the entry
-    auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
-    auto ptr = table_entry.get();
-    owned_tables[table_name] = std::move(table_entry);
-    return ptr;
+    // Check again if the table exists
+    {
+        std::unique_lock<std::mutex> tables_lock(tables_mutex);
+
+        // Return the entry if it already exists
+        auto it = owned_tables.find(table_name);
+        if (it != owned_tables.end()) {
+            return it->second.get();
+        }
+
+        // Insert the entry
+        auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
+        auto ptr = table_entry.get();
+        owned_tables[table_name] = std::move(table_entry);
+        return ptr;
+    }
+    return nullptr;
 }
 
 optional_ptr<CatalogEntry> AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
                                                         const EntryLookupInfo &lookup_info) {
-    auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-    auto catalog_lock = adbc_catalog.AcquireScopedLock();
-
     try {
         return GetOrCreateTableEntry(transaction.GetContext(), lookup_info.GetEntryName());
     } catch (...) {
@@ -74,14 +88,14 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
                            CatalogType type,
                            const std::function<void(CatalogEntry &)> &callback) {
 
-    auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-    auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
     // We only support table lookups
     if (type != CatalogType::TABLE_ENTRY) {
         return;
     }
 
+
+    auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
     auto schema_name = adbc_catalog.GetInternalSchemaName(name);
     auto uri = adbc_catalog.GetDBPath();
 
@@ -96,9 +110,9 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
 optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
 
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-    auto catalog_lock = adbc_catalog.AcquireScopedLock();
 
     // Throw an exception if the entry already exists
+    std::unique_lock<std::mutex> tables_lock(tables_mutex);
     auto table_name = info.Base().table;
     auto it = owned_tables.find(table_name);
     if (it != owned_tables.end()) {
