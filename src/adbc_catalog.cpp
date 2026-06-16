@@ -34,29 +34,46 @@ unique_ptr<AdbcPooledConnection> AdbcCatalog::GetPooledConnection() {
 
 string AdbcCatalog::FetchCatalogName() {
 
+    // The catalog name has unbounded length
+    // Fast path: try fititng the catalog name in a stack buffer
+    char stack_buffer[4096] = {'\0'};
+    size_t length = sizeof(stack_buffer);
+
     // Use GetOption(...) to fetch the catalog name
     Handle<Private::AdbcError> error = {};
-    size_t length = 0;
     auto connection = pool->GetConnection();
 
     // Exit if there's no support for this option
-    if (AdbcConnectionGetOption(connection->GetRawConnection(),
-                                ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
-                                nullptr,
-                                &length,
-                                error.get()) == ADBC_STATUS_NOT_FOUND) {
+    auto option_status = AdbcConnectionGetOption(connection->GetRawConnection(),
+                                                 ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
+                                                 stack_buffer,
+                                                 &length,
+                                                 error.get());
+
+    // If the option is not supported then exit here
+    if (option_status == ADBC_STATUS_NOT_FOUND) {
         return "";
     }
 
-    // Allocate space for the catalog name
-    auto buffer = std::make_unique<char[]>(length);
+    // Check that the call succeeded
+    CHECK_ADBC(option_status, IOException);
+
+    // Exit if the fast path succeeded
+    if (length <= sizeof(stack_buffer)) {
+        return stack_buffer;
+    }
+
+    // Otherwise we are in the slow path and need to heap allocate a buffer for the catalog name
+    auto heap_buffer = std::make_unique<char[]>(length);
+
+    // Fetch the catalog name again and return
     CHECK_ADBC(AdbcConnectionGetOption(connection->GetRawConnection(),
                                        ADBC_CONNECTION_OPTION_CURRENT_CATALOG,
-                                       buffer.get(),
+                                       heap_buffer.get(),
                                        &length,
                                        error.get()),
                BinderException);
-    return string(buffer.get());
+    return string(heap_buffer.get());
 }
 
 vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
