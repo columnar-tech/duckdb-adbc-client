@@ -113,6 +113,11 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
     auto &context = transaction.GetContext();
     auto table_name = info.Base().table;
 
+    // Guard against OR REPLACE qualifier
+    if (info.Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
+        throw NotImplementedException("CREATE OR REPLACE TABLE not yet supported with the ADBC extension");
+    }
+
     {
         // Throw an exception if the entry already exists
         std::unique_lock<std::mutex> tables_lock(tables_mutex);

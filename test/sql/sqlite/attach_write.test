@@ -425,6 +425,9 @@ statement ok
 CALL adbc_execute('profile://./test/empty.toml','DROP TABLE special_strings');
 
 statement ok
+CALL adbc_execute('profile://./test/empty.toml','DROP TABLE empty');
+
+statement ok
 CALL adbc_execute('profile://./test/empty.toml','DROP TABLE empty_ctas');
 
 statement ok
