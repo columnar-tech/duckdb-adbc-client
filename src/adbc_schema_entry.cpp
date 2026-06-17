@@ -110,16 +110,83 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
 optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
 
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-
-    // Throw an exception if the entry already exists
-    std::unique_lock<std::mutex> tables_lock(tables_mutex);
+    auto &context = transaction.GetContext();
     auto table_name = info.Base().table;
-    auto it = owned_tables.find(table_name);
-    if (it != owned_tables.end()) {
-        throw CatalogException::EntryAlreadyExists(CatalogType::TABLE_ENTRY, table_name);
-    }
 
-    throw NotImplementedException("CreateTable not yet supported with the ADBC extension");
+    {
+        // Throw an exception if the entry already exists
+        std::unique_lock<std::mutex> tables_lock(tables_mutex);
+        auto it = owned_tables.find(table_name);
+        if (it != owned_tables.end()) {
+            throw CatalogException::EntryAlreadyExists(CatalogType::TABLE_ENTRY, table_name);
+        }
+
+        auto connection = adbc_catalog.GetPooledConnection();
+        auto *raw_conn = connection->GetRawConnection();
+        Handle<Private::AdbcStatement> statement = {};
+        Handle<ArrowSchema> schema = {};
+        Handle<ArrowArrayStream> stream = {};
+        Handle<Private::AdbcError> error = {};
+
+        // Build the Arrow schema from the column types/names
+        auto properties = context.GetClientProperties();
+        vector<LogicalType> column_types;
+        vector<string> column_names;
+        for (auto &col : info.Base().columns.Logical()) {
+            column_types.push_back(col.GetType());
+            column_names.push_back(col.GetName());
+        }
+        auto internal_schema = adbc_catalog.GetInternalSchemaName(info.Base().schema);
+
+
+        ArrowConverter::ToArrowSchema(schema.get(), column_types, column_names, properties);
+
+        // Manually wire up a minimal ArrowArrayStream backed by the schema.
+        // The stream holds a raw pointer to the schema so it can serve get_schema,
+        // then immediately returns end-of-stream (0) on get_next.
+        stream->private_data = schema.get();
+
+        stream->get_schema = [](ArrowArrayStream *s, ArrowSchema *out) -> int {
+            auto *src = static_cast<ArrowSchema *>(s->private_data);
+            ArrowSchemaMove(src, out);
+            return 0;
+        };
+
+        stream->get_next = [](ArrowArrayStream *, ArrowArray *out) -> int {
+            out->release = nullptr; // signals end-of-stream
+            return 0;
+        };
+
+        stream->get_last_error = [](ArrowArrayStream *) -> const char * { return nullptr; };
+
+        stream->release = [](ArrowArrayStream *s) {
+            s->private_data = nullptr;
+            s->release = nullptr;
+        };
+
+        // Create a statement to do the CREATE TABLE
+        CHECK_ADBC(AdbcStatementNew(raw_conn, statement.get(), error.get()), IOException);
+
+        // Set the schema name
+        if (!internal_schema.empty()) {
+            CHECK_ADBC(AdbcStatementSetOption(statement.get(),
+                                              ADBC_INGEST_OPTION_TARGET_DB_SCHEMA,
+                                              internal_schema.c_str(),
+                                              error.get()),
+                       IOException);
+        }
+
+        // Set the table name
+        CHECK_ADBC(
+            AdbcStatementSetOption(statement.get(), ADBC_INGEST_OPTION_TARGET_TABLE, table_name.c_str(), error.get()),
+            IOException);
+
+        // Bind the empty stream — this creates the table schema without inserting rows
+        CHECK_ADBC(AdbcStatementBindStream(statement.get(), stream.get(), error.get()), IOException);
+        CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), nullptr, nullptr, error.get()), IOException);
+    }
+    // Return the entry
+    return GetOrCreateTableEntry(context, table_name);
 }
 
 } // namespace adbc

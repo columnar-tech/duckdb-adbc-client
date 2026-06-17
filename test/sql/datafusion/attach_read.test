@@ -4,6 +4,9 @@
 
 require adbc
 
+statement ok
+SET threads = 1
+
 # Create a datafusion DB with penguins
 statement ok
 ATTACH 'profile://./test/datafusion.toml' AS datafusion_db (TYPE adbc);

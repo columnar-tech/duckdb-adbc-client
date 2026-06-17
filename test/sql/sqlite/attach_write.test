@@ -219,6 +219,17 @@ SELECT s FROM special_strings WHERE s LIKE '%🦆%'
 ----
 emoji 🦆
 
+
+# CREATE TABLE
+statement ok
+CREATE TABLE empty (a INTEGER, b DOUBLE, c VARCHAR, d TIMESTAMP);
+
+# Empty row count
+query I
+SELECT COUNT(*) FROM empty
+----
+0
+
 # Empty CTAS
 statement ok
 CREATE TABLE empty_ctas AS
@@ -287,20 +298,21 @@ ATTACH 'profile://./test/empty.toml' AS db2 (TYPE adbc)
 statement ok
 USE db2.main
 
-# All tables survive
-query I
-SHOW TABLES
+# All tables survive with correct metadata
+query IIIIII
+SHOW ALL TABLES
 ----
-big_nums
-empty_ctas
-even_numbers
-integers
-nullable
-people
-precision_test
-single_col
-special_strings
-types_test
+db2	main	big_nums	[max_val, min_val]	[BIGINT, BIGINT]	false
+db2	main	empty	[a, b, c, d]	[BIGINT, BIGINT, BIGINT, BIGINT]	false
+db2	main	empty_ctas	[id, label, score]	[BIGINT, BIGINT, BIGINT]	false
+db2	main	even_numbers	[n]	[BIGINT]	false
+db2	main	integers	[a, b, c]	[BIGINT, BIGINT, BIGINT]	false
+db2	main	nullable	[id, val, num]	[BIGINT, VARCHAR, DOUBLE]	false
+db2	main	people	[name, age]	[VARCHAR, BIGINT]	false
+db2	main	precision_test	[v]	[DOUBLE]	false
+db2	main	single_col	[x]	[BIGINT]	false
+db2	main	special_strings	[s]	[VARCHAR]	false
+db2	main	types_test	[big_int, dbl, str, flag]	[BIGINT, DOUBLE, VARCHAR, BIGINT]	false
 
 # Table retains its rows after detach/re-attach
 query I

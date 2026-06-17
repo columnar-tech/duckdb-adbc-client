@@ -5,6 +5,9 @@
 require adbc
 
 statement ok
+SET threads = 1
+
+statement ok
 ATTACH 'profile://./test/datafusion.toml' AS datafusion_db (TYPE adbc)
 
 statement ok
@@ -207,6 +210,16 @@ SELECT s FROM special_strings WHERE s LIKE '%🦆%'
 ----
 emoji 🦆
 
+# CREATE TABLE
+statement ok
+CREATE TABLE empty (a INTEGER, b DOUBLE, c VARCHAR, d TIMESTAMP);
+
+# Empty row count
+query I
+SELECT COUNT(*) FROM empty;
+----
+0
+
 # Empty CTAS
 statement ok
 CREATE TABLE empty_ctas AS
@@ -307,6 +320,24 @@ query II
 SELECT COUNT(*), SUM(id) FROM bulk_stress
 ----
 500001	124999750001
+
+# Check all tables are there with the correct types
+query IIIIII 
+SHOW ALL TABLES
+----
+datafusion_db	public	bulk_stress	[id]	[INTEGER]	false
+datafusion_db	public	empty	[a, b, c, d]	[INTEGER, DOUBLE, VARCHAR, TIMESTAMP]	false
+datafusion_db	public	empty_ctas	[id, label, score]	[INTEGER, VARCHAR, DOUBLE]	false
+datafusion_db	public	even_numbers	[n]	[INTEGER]	false
+datafusion_db	public	integers	[a, b, c]	[INTEGER, INTEGER, INTEGER]	false
+datafusion_db	public	nullable	[id, val, num]	[INTEGER, VARCHAR, DOUBLE]	false
+datafusion_db	public	orders	[order_id, customer, amount]	[INTEGER, VARCHAR, INTEGER]	false
+datafusion_db	public	people	[name, age]	[VARCHAR, INTEGER]	false
+datafusion_db	public	precision_test	[v]	[DOUBLE]	false
+datafusion_db	public	single_col	[x]	[INTEGER]	false
+datafusion_db	public	special_strings	[s]	[VARCHAR]	false
+datafusion_db	public	temporal_test	[date_col, ts_col]	[DATE, TIMESTAMP]	false
+datafusion_db	public	types_test	[big_int, dbl, str, flag]	[INTEGER, DOUBLE, VARCHAR, BOOLEAN]	false
 
 # Clean up
 statement ok
