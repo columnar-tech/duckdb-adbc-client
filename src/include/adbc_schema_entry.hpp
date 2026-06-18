@@ -30,6 +30,8 @@ public:
     AdbcSchemaEntry(Catalog &catalog, CreateSchemaInfo &info) : SchemaCatalogEntry(catalog, info) {
     }
 
+    void Reset();
+
     CatalogEntry *GetOrCreateTableEntry(ClientContext &context, const string &table_name);
 
     optional_ptr<CatalogEntry> LookupEntry(CatalogTransaction transaction, const EntryLookupInfo &lookup_info) override;
@@ -92,8 +94,11 @@ public:
     }
 
 private:
+    CatalogEntry *GetOrCreateTableEntryInternal(ClientContext &context, const string &table_name);
+
     std::mutex tables_mutex;
     case_insensitive_map_t<unique_ptr<CatalogEntry>> owned_tables;
+    bool tables_loaded = false;
 };
 
 } // namespace adbc

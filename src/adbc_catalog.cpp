@@ -123,11 +123,13 @@ void AdbcCatalog::ClearCache() {
     // Delete all schemas
     std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
     owned_schemas.clear();
+    cached_schema_names.clear();
+    schema_names_loaded = false;
 }
 
 void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
     // For each schema, create a catalog entry and execute the callback
-    for (auto &schema_name : FetchSchemaNames()) {
+    for (auto &schema_name : GetCachedSchemaNames()) {
         if (auto *entry = GetCatalogEntry(GetInternalSchemaName(schema_name))) {
             callback(*entry);
         } else {
@@ -146,8 +148,11 @@ optional_ptr<SchemaCatalogEntry> AdbcCatalog::LookupSchema(CatalogTransaction tr
         return entry;
     }
 
+    auto &names = GetCachedSchemaNames();
+    bool found = (std::find(names.begin(), names.end(), internal_name) != names.end());
+
     // Throw an exception if the schema doesn't exist
-    if (!SchemaExists(internal_name)) {
+    if (!found) {
         if (if_not_found == OnEntryNotFound::RETURN_NULL) {
             return nullptr;
         }
@@ -201,6 +206,10 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
     auto &insert =
         planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::CTAS);
     insert.children.push_back(plan);
+    auto &insert_node = insert.Cast<AdbcInsert>();
+
+    // Reset the schema
+    GetCatalogEntry(internal_schema)->Cast<AdbcSchemaEntry>().Reset();
     return insert;
 }
 
@@ -310,25 +319,6 @@ void AdbcCatalog::ForEachCatalog(const char *schema_name,
     }
 }
 
-bool AdbcCatalog::SchemaExists(const string &schema_name) {
-    // Check if the schema exists
-    bool exists = false;
-    auto internal_schema = GetInternalSchemaName(schema_name);
-    ForEachCatalog(internal_schema.c_str(), ADBC_OBJECT_DEPTH_DB_SCHEMAS, [&exists](ArrowArray *batch) {
-        auto *catalog_schemas_list = batch->children[1];
-        auto *offsets = reinterpret_cast<const int32_t *>(catalog_schemas_list->buffers[1]);
-        for (int64_t i = 0; i < batch->length; ++i) {
-            // Check if schema exists
-            if (offsets[i + 1] > offsets[i]) {
-                exists = true;
-                return false;
-            }
-        }
-        return true;
-    });
-    return exists;
-}
-
 vector<string> AdbcCatalog::FetchSchemaNames() {
     // Collect all schema names from the result
     vector<string> schema_names;
@@ -354,6 +344,17 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
     });
     return schema_names;
 }
+
+const vector<string> &AdbcCatalog::GetCachedSchemaNames() {
+    // Lazy load schema names
+    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
+    if (!schema_names_loaded) {
+        cached_schema_names = FetchSchemaNames();
+        schema_names_loaded = true;
+    }
+    return cached_schema_names;
+}
+
 
 SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
     // Look up the entry

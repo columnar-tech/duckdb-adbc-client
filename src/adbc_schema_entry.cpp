@@ -25,17 +25,21 @@
 namespace duckdb {
 namespace adbc {
 
-CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, const string &table_name) {
+void AdbcSchemaEntry::Reset() {
+    std::unique_lock<std::mutex> table_lock(tables_mutex);
+    tables_loaded = false;
+}
 
-    // Check if the table exists
-    {
-        std::unique_lock<std::mutex> tables_lock(tables_mutex);
+CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntryInternal(ClientContext &context, const string &table_name) {
+    // Return the entry if it already exists
+    auto it = owned_tables.find(table_name);
+    if (it != owned_tables.end()) {
+        return it->second.get();
+    }
 
-        // Return the entry if it already exists
-        auto it = owned_tables.find(table_name);
-        if (it != owned_tables.end()) {
-            return it->second.get();
-        }
+    // Table doesn't exist if it's not in the cache
+    if (tables_loaded) {
+        return nullptr;
     }
 
     // Create the entry to be inserted
@@ -56,23 +60,16 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, con
     }
     table_info->internal = false;
 
-    // Check again if the table exists
-    {
-        std::unique_lock<std::mutex> tables_lock(tables_mutex);
+    // Insert the entry
+    auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
+    auto ptr = table_entry.get();
+    owned_tables[table_name] = std::move(table_entry);
+    return ptr;
+}
 
-        // Return the entry if it already exists
-        auto it = owned_tables.find(table_name);
-        if (it != owned_tables.end()) {
-            return it->second.get();
-        }
-
-        // Insert the entry
-        auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
-        auto ptr = table_entry.get();
-        owned_tables[table_name] = std::move(table_entry);
-        return ptr;
-    }
-    return nullptr;
+CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, const string &table_name) {
+    std::unique_lock<std::mutex> tables_lock(tables_mutex);
+    return GetOrCreateTableEntryInternal(context, table_name);
 }
 
 optional_ptr<CatalogEntry> AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
@@ -94,16 +91,28 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
         return;
     }
 
+    // Load the tables if we haven't already
+    std::unique_lock<std::mutex> table_lock(tables_mutex);
+    if (!tables_loaded) {
 
-    auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-    auto schema_name = adbc_catalog.GetInternalSchemaName(name);
-    auto uri = adbc_catalog.GetDBPath();
 
-    // For each ADBC table in the schema, get or create an entry for it
-    for (const auto &table_name : adbc_catalog.FetchTableNames(schema_name)) {
-        if (auto *entry = GetOrCreateTableEntry(context, table_name)) {
-            callback(*entry);
+        // First fetch the table names for this schema
+        auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+        auto schema_name = adbc_catalog.GetInternalSchemaName(name);
+        auto table_names = adbc_catalog.FetchTableNames(schema_name);
+
+        // Next fo reach table name, create an entry for it
+        for (const auto &table_name : table_names) {
+            GetOrCreateTableEntryInternal(context, table_name);
         }
+
+        // Mark tables as loaded now
+        tables_loaded = true;
+    }
+
+    // Now fire the callback for each entry
+    for (auto &[_, entry] : owned_tables) {
+        callback(*entry);
     }
 }
 
@@ -190,8 +199,13 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
         CHECK_ADBC(AdbcStatementBindStream(statement.get(), stream.get(), error.get()), IOException);
         CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), nullptr, nullptr, error.get()), IOException);
     }
+
     // Return the entry
-    return GetOrCreateTableEntry(context, table_name);
+    std::unique_lock<std::mutex> tables_lock(tables_mutex);
+    tables_loaded = false;
+    auto *entry = GetOrCreateTableEntryInternal(context, table_name);
+    tables_loaded = true;
+    return entry;
 }
 
 } // namespace adbc

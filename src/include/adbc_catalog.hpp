@@ -44,8 +44,8 @@ public:
                                                    }())),
           catalog_name(FetchCatalogName()) {
 
-        auto schemas = FetchSchemaNames();
-        no_schemas = (schemas.size() == 1 && schemas.front() == "");
+        cached_schema_names = FetchSchemaNames();
+        no_schemas = (cached_schema_names.size() == 1 && cached_schema_names.front() == "");
     }
 
     bool NoSchemas() {
@@ -141,9 +141,9 @@ public:
 
 private:
     void ForEachCatalog(const char *schema_name, int depth, const std::function<bool(ArrowArray *)> &callback);
-    bool SchemaExists(const string &schema_name);
     string FetchCatalogName();
     vector<string> FetchSchemaNames();
+    const vector<string> &GetCachedSchemaNames();
     SchemaCatalogEntry *GetCatalogEntry(const string &schema_name);
     SchemaCatalogEntry *CreateCatalogEntry(const string &schema_name);
     bool ContainsAdbcReads(PhysicalOperator &op);
@@ -156,6 +156,8 @@ private:
     string catalog_name;
     std::mutex schemas_mutex;
     case_insensitive_map_t<unique_ptr<AdbcSchemaEntry>> owned_schemas;
+    vector<string> cached_schema_names;
+    bool schema_names_loaded = true;
     bool no_schemas;
 };
 
