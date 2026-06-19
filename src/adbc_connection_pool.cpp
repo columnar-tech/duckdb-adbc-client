@@ -31,7 +31,7 @@ unique_ptr<AdbcPooledConnection> AdbcConnectionPool::GetEphemeralConnection(cons
 }
 
 unique_ptr<AdbcPooledConnection> AdbcConnectionPool::GetConnection() {
-    lock_guard<mutex> connection_lock(connection_mutex);
+    unique_lock<mutex> connection_lock(connection_mutex);
 
     // If there are no available connections
     if (connections.empty()) {
@@ -52,7 +52,7 @@ unique_ptr<AdbcPooledConnection> AdbcConnectionPool::GetConnection() {
 }
 
 void AdbcConnectionPool::ReturnConnection(unique_ptr<AdbcConnection> connection) {
-    lock_guard<mutex> connection_lock(connection_mutex);
+    unique_lock<mutex> connection_lock(connection_mutex);
     --active_connections;
     connections.push_back(std::move(connection));
 }

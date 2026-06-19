@@ -121,7 +121,7 @@ vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
 
 void AdbcCatalog::ClearCache() {
     // Delete all schemas
-    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
+    unique_lock<mutex> schemas_lock(schemas_mutex);
     owned_schemas.clear();
     cached_schema_names.clear();
     schema_names_loaded = false;
@@ -208,8 +208,7 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
     insert.children.push_back(plan);
     auto &insert_node = insert.Cast<AdbcInsert>();
 
-    // Reset the schema
-    GetCatalogEntry(internal_schema)->Cast<AdbcSchemaEntry>().Reset();
+    GetCatalogEntry(internal_schema)->Cast<AdbcSchemaEntry>().LazyLoadNewTables();
     return insert;
 }
 
@@ -347,7 +346,7 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
 
 const vector<string> &AdbcCatalog::GetCachedSchemaNames() {
     // Lazy load schema names
-    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
+    unique_lock<mutex> schemas_lock(schemas_mutex);
     if (!schema_names_loaded) {
         cached_schema_names = FetchSchemaNames();
         schema_names_loaded = true;
@@ -358,7 +357,7 @@ const vector<string> &AdbcCatalog::GetCachedSchemaNames() {
 
 SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
     // Look up the entry
-    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
+    unique_lock<mutex> schemas_lock(schemas_mutex);
     auto it = owned_schemas.find(GetInternalSchemaName(schema_name));
     if (it != owned_schemas.end()) {
         return it->second.get();
@@ -368,7 +367,7 @@ SchemaCatalogEntry *AdbcCatalog::GetCatalogEntry(const string &schema_name) {
 
 SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
     // Return the entry if it already exists
-    std::unique_lock<std::mutex> schemas_lock(schemas_mutex);
+    unique_lock<mutex> schemas_lock(schemas_mutex);
     auto internal_schema = GetInternalSchemaName(schema_name);
     auto it = owned_schemas.find(internal_schema);
     if (it != owned_schemas.end()) {

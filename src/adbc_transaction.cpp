@@ -64,7 +64,7 @@ Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
     auto transaction = make_uniq<AdbcTransaction>(*this, context);
     auto &result = *transaction;
     {
-        lock_guard<mutex> map_lock(map_mutex);
+        unique_lock<mutex> map_lock(map_mutex);
         transactions[result] = std::move(transaction);
     }
     return result;
@@ -72,14 +72,14 @@ Transaction &AdbcTransactionManager::StartTransaction(ClientContext &context) {
 
 ErrorData AdbcTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
     // Remove the committed transaction and release the lock
-    lock_guard<mutex> map_lock(map_mutex);
+    unique_lock<mutex> map_lock(map_mutex);
     transactions.erase(transaction);
     return ErrorData();
 }
 
 void AdbcTransactionManager::RollbackTransaction(Transaction &transaction) {
     // Remove the transaction we are rolling back and release the lock
-    lock_guard<mutex> map_lock(map_mutex);
+    unique_lock<mutex> map_lock(map_mutex);
     transactions.erase(transaction);
 }
 

@@ -25,8 +25,8 @@
 namespace duckdb {
 namespace adbc {
 
-void AdbcSchemaEntry::Reset() {
-    std::unique_lock<std::mutex> table_lock(tables_mutex);
+void AdbcSchemaEntry::LazyLoadNewTables() {
+    unique_lock<mutex> table_lock(tables_mutex);
     tables_loaded = false;
 }
 
@@ -68,7 +68,7 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntryInternal(ClientContext &cont
 }
 
 CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, const string &table_name) {
-    std::unique_lock<std::mutex> tables_lock(tables_mutex);
+    unique_lock<mutex> tables_lock(tables_mutex);
     return GetOrCreateTableEntryInternal(context, table_name);
 }
 
@@ -92,7 +92,7 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
     }
 
     // Load the tables if we haven't already
-    std::unique_lock<std::mutex> table_lock(tables_mutex);
+    unique_lock<mutex> table_lock(tables_mutex);
     if (!tables_loaded) {
 
 
@@ -129,7 +129,7 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
 
     {
         // Throw an exception if the entry already exists
-        std::unique_lock<std::mutex> tables_lock(tables_mutex);
+        unique_lock<mutex> tables_lock(tables_mutex);
         auto it = owned_tables.find(table_name);
         if (it != owned_tables.end()) {
             throw CatalogException::EntryAlreadyExists(CatalogType::TABLE_ENTRY, table_name);
@@ -201,7 +201,7 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
     }
 
     // Return the entry
-    std::unique_lock<std::mutex> tables_lock(tables_mutex);
+    unique_lock<mutex> tables_lock(tables_mutex);
     tables_loaded = false;
     auto *entry = GetOrCreateTableEntryInternal(context, table_name);
     tables_loaded = true;

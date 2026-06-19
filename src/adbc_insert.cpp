@@ -77,7 +77,7 @@ public:
     ~AdbcInsertGlobalState() {
         {
             // Acquire the lock to update flags
-            lock_guard<mutex> state_lock(insert_mutex);
+            unique_lock<mutex> state_lock(insert_mutex);
             // Set the cancel flag
             canceled = true;
             // Set the done flag
@@ -390,7 +390,7 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline,
 
     // Signal that all data has been sent
     {
-        lock_guard<mutex> state_lock(gstate.insert_mutex);
+        unique_lock<mutex> state_lock(gstate.insert_mutex);
         gstate.done = true;
     }
 
@@ -422,7 +422,7 @@ SourceResultType AdbcInsert::GetData(ExecutionContext &context, DataChunk &chunk
     auto &gstate = sink_state->Cast<AdbcInsertGlobalState>();
     {
         // Acquire the lock before fetching the insert count
-        lock_guard<mutex> state_lock(gstate.insert_mutex);
+        unique_lock<mutex> state_lock(gstate.insert_mutex);
         chunk.SetCardinality(1);
         chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
     }

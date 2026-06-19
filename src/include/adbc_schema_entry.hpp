@@ -30,7 +30,7 @@ public:
     AdbcSchemaEntry(Catalog &catalog, CreateSchemaInfo &info) : SchemaCatalogEntry(catalog, info) {
     }
 
-    void Reset();
+    void LazyLoadNewTables();
 
     CatalogEntry *GetOrCreateTableEntry(ClientContext &context, const string &table_name);
 
