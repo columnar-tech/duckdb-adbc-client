@@ -87,11 +87,7 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
         CHECK_ADBC(schema_status, BinderException);
     }
 
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-    ArrowTableFunction::PopulateArrowTableSchema(context, arrow_table, schema_root.arrow_schema);
-#else
     ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table, schema_root.arrow_schema);
-#endif
 }
 
 void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
@@ -130,10 +126,7 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
         ArrowTableFunction::ArrowToDuckDB(local_state,
                                           function_data.arrow_table.GetColumns(),
                                           local_state.all_columns,
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-#else
                                           function_data.lines_read - output_size,
-#endif
                                           false);
         output.ReferenceColumns(local_state.all_columns, global_state.projection_ids);
     } else {
@@ -141,11 +134,7 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
         ArrowTableFunction::ArrowToDuckDB(local_state,
                                           function_data.arrow_table.GetColumns(),
                                           output,
-
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-#else
                                           function_data.lines_read - output_size,
-#endif
                                           false);
     }
 

@@ -68,11 +68,8 @@ static void LoadInternal(ExtensionLoader &loader) {
 
     // Storage extension for ATTACH
     auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-    StorageExtension::Register(config, "adbc", make_uniq<adbc::AdbcStorageExtension>());
-#else
     config.storage_extensions["adbc"] = make_uniq<adbc::AdbcStorageExtension>();
-#endif
+
     // Create a custom knob to control whether concurrent ADBC reads and writes
     // are supported
     config.AddExtensionOption("adbc_mix_reads_writes",

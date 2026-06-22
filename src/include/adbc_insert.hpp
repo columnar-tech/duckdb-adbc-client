@@ -47,13 +47,7 @@ private:
 
 public:
     // Source interface
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-    SourceResultType GetDataInternal(ExecutionContext &context,
-                                     DataChunk &chunk,
-                                     OperatorSourceInput &input) const override;
-#else
     SourceResultType GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const override;
-#endif
     bool IsSource() const override {
         return true;
     }
