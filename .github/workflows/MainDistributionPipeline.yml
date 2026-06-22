@@ -64,7 +64,13 @@ jobs:
       - name: Run tests (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
-        run: ./build/release/test/unittest 
+        run: |
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            export ADBC_DRIVER_PATH="$HOME/Library/Application Support/ADBC/Drivers"
+          else
+            export ADBC_DRIVER_PATH="$HOME/.config/adbc/drivers"
+          fi
+          python3 ./duckdb/scripts/ci/run_tests.py ./build/release/test/unittest "test/*" --workers=1         
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
