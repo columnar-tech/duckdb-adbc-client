@@ -412,13 +412,9 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline,
     }
     return SinkFinalizeType::READY;
 }
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
 SourceResultType AdbcInsert::GetDataInternal(ExecutionContext &context,
                                              DataChunk &chunk,
                                              OperatorSourceInput &input) const {
-#else
-SourceResultType AdbcInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-#endif
     auto &gstate = sink_state->Cast<AdbcInsertGlobalState>();
     {
         // Acquire the lock before fetching the insert count
