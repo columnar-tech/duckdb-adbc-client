@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DuckDB ADBC Extension</title>
+</head>
+<body>
+<script>
+  // DuckDB requests: /v1.5.4/linux_amd64/adbc.duckdb_extension.gz
+  // Release asset:   adbc.duckdb_extension-duckdb-1.5.4-linux_amd64.gz
+  // Release tag:     v0.0.1-duckdb1.5.4
+
+  const REPO = "columnar-tech/duckdb-adbc-client";
+
+  const path = window.location.pathname;
+  // Expected format: /{duckdb_version}/{platform}/adbc.duckdb_extension.gz
+  const match = path.match(/^\/(v[\d.]+)\/([^/]+)\/adbc\.duckdb_extension(\.gz)?$/);
+
+  if (!match) {
+    document.body.innerText = "Not found: " + path;
+  } else {
+    const duckdbVersion = match[1].replace(/^v/, ""); // e.g. 1.5.4
+    const platform = match[2];                        // e.g. linux_amd64
+    const tag = `v0.0.1-duckdb${duckdbVersion}`;
+    const assetName = `adbc.duckdb_extension-duckdb-${duckdbVersion}-${platform}.gz`;
+    const url = `https://github.com/${REPO}/releases/download/${tag}/${assetName}`;
+
+    window.location.replace(url);
+  }
+</script>
+</body>
+</html>
