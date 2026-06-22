@@ -7,9 +7,11 @@ on:
     branches:
       - main
   workflow_dispatch:
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: true
+
 jobs:
   duckdb-build-next:
     name: Build extension binaries (main)
@@ -17,15 +19,6 @@ jobs:
     with:
       duckdb_version: main
       ci_tools_version: main
-      extension_name: adbc
-      skip_tests: true
-
-  duckdb-build-stable:
-    name: Build extension binaries (stable)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
-    with:
-      duckdb_version: v1.5-variegata
-      ci_tools_version: v1.5-variegata
       extension_name: adbc
       skip_tests: true
 
@@ -45,7 +38,7 @@ jobs:
       fail-fast: true
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        duckdb_version: [main, v1.5-variegata]
+        duckdb_version: [main]
         include:
           - os: ubuntu-latest
             arch: linux_amd64
@@ -71,20 +64,20 @@ jobs:
       - name: Run tests (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
-        run: ./build/release/test/unittest
+        run: ./build/release/test/unittest 
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           & .\build\release\test\unittest.exe test\
 
-  deploy-stable:
-    name: Deploy extension binaries (stable)
-    needs: [duckdb-build-stable, test]
+  deploy-main:
+    name: Deploy extension binaries (main)
+    needs: [duckdb-build-next, test]
     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@main
     secrets: inherit
     with:
-      duckdb_version: v1.5-variegata
-      ci_tools_version: v1.5-variegata
+      duckdb_version: main
+      ci_tools_version: main
       extension_name: adbc
