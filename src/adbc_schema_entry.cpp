@@ -46,16 +46,16 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntryInternal(ClientContext &cont
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
 
     // Bind a SQL statement and use ADBC to retrieve the metadata for the table
-    string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name, table_name);
+    string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name.GetIdentifierName(), table_name);
 
     auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
     auto bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
 
     auto col_names = bind_data->arrow_table.GetNames();
     auto col_types = bind_data->arrow_table.GetTypes();
-    auto table_info = make_uniq<CreateTableInfo>(*this, table_name);
+    auto table_info = make_uniq<CreateTableInfo>(*this, Identifier(table_name));
     for (idx_t i = 0; i < col_names.size(); i++) {
-        ColumnDefinition col(col_names[i], col_types[i]);
+        ColumnDefinition col(Identifier(col_names[i]), col_types[i]);
         table_info->columns.AddColumn(std::move(col));
     }
     table_info->internal = false;
@@ -98,7 +98,7 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
 
         // First fetch the table names for this schema
         auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
-        auto schema_name = adbc_catalog.GetInternalSchemaName(name);
+        auto schema_name = adbc_catalog.GetInternalSchemaName(name.GetIdentifierName());
         auto table_names = adbc_catalog.FetchTableNames(schema_name);
 
         // Next fo reach table name, create an entry for it
@@ -130,7 +130,7 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
     {
         // Throw an exception if the entry already exists
         unique_lock<mutex> tables_lock(tables_mutex);
-        auto it = owned_tables.find(table_name);
+        auto it = owned_tables.find(table_name.GetIdentifierName());
         if (it != owned_tables.end()) {
             throw CatalogException::EntryAlreadyExists(CatalogType::TABLE_ENTRY, table_name);
         }
@@ -148,9 +148,9 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
         vector<string> column_names;
         for (auto &col : info.Base().columns.Logical()) {
             column_types.push_back(col.GetType());
-            column_names.push_back(col.GetName());
+            column_names.push_back(col.GetName().GetIdentifierName());
         }
-        auto internal_schema = adbc_catalog.GetInternalSchemaName(info.Base().schema);
+        auto internal_schema = adbc_catalog.GetInternalSchemaName(info.Base().schema.GetIdentifierName());
 
 
         ArrowConverter::ToArrowSchema(schema.get(), column_types, column_names, properties);
@@ -203,7 +203,7 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
     // Return the entry
     unique_lock<mutex> tables_lock(tables_mutex);
     tables_loaded = false;
-    auto *entry = GetOrCreateTableEntryInternal(context, table_name);
+    auto *entry = GetOrCreateTableEntryInternal(context, table_name.GetIdentifierName());
     tables_loaded = true;
     return entry;
 }

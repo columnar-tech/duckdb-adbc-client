@@ -199,10 +199,10 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
     vector<string> column_names;
     for (auto &col : info->Base().columns.Logical()) {
         column_types.push_back(col.GetType());
-        column_names.push_back(col.GetName());
+        column_names.push_back(col.GetName().GetIdentifierName());
     }
-    auto table_name = info->Base().table;
-    auto internal_schema = GetInternalSchemaName(info->Base().schema);
+    auto table_name = info->Base().table.GetIdentifierName();
+    auto internal_schema = GetInternalSchemaName(info->Base().schema.GetIdentifierName());
     auto &insert =
         planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::CTAS);
     insert.children.push_back(plan);
@@ -269,18 +269,18 @@ PhysicalOperator &AdbcCatalog::PlanInsert(ClientContext &context,
         }
         for (idx_t c = 0; c < column_count; c++) {
             auto &col = columns.GetColumn(column_indexes[c]);
-            column_names.push_back(col.GetName());
+            column_names.push_back(col.GetName().GetIdentifierName());
             column_types.push_back(col.GetType());
         }
     } else {
         for (auto &col : columns.Logical()) {
+            column_names.push_back(col.GetName().GetIdentifierName());
             column_types.push_back(col.GetType());
-            column_names.push_back(col.GetName());
         }
     }
 
-    auto table_name = table.name;
-    auto internal_schema = GetInternalSchemaName(table.schema.name);
+    auto table_name = table.name.GetIdentifierName();
+    auto internal_schema = GetInternalSchemaName(table.schema.name.GetIdentifierName());
     auto &insert =
         planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::APPEND);
     insert.children.push_back(*plan);
@@ -376,7 +376,7 @@ SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
 
     // Create and insert the entry
     CreateSchemaInfo info;
-    info.schema = GetExternalSchemaName(schema_name);
+    info.schema = Identifier(GetExternalSchemaName(schema_name));
     auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
     auto ptr = schema_entry.get();
     owned_schemas[internal_schema] = std::move(schema_entry);

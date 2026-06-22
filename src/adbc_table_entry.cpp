@@ -97,14 +97,15 @@ TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr
 
     // construct an ADBC scan function using a new connection object for the scan
     auto pooled_connection = adbc_catalog.GetPooledConnection();
-    auto internal_schema = adbc_catalog.GetInternalSchemaName(schema.name);
+    auto internal_schema = adbc_catalog.GetInternalSchemaName(schema.name.GetIdentifierName());
     auto catalog_name = adbc_catalog.GetCatalogName();
     auto cardinality = GetTableCardinality(pooled_connection->GetRawConnection(),
                                            catalog_name.empty() ? nullptr : catalog_name.c_str(),
                                            internal_schema.c_str(),
                                            name.c_str());
 
-    string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(schema.name, name);
+    string sql = "SELECT * FROM  " +
+                 adbc_catalog.GetDelimitedInternalName(schema.name.GetIdentifierName(), name.GetIdentifierName());
 
     auto adbc_arrow_stream_factory = make_uniq<AdbcArrowStreamFactory>(std::move(pooled_connection), sql);
     auto arrow_function_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(adbc_arrow_stream_factory));

@@ -5,12 +5,12 @@ set(TARGET_NAME adbc)
 set(EXTENSION_NAME ${TARGET_NAME}_extension)
 set(LOADABLE_EXTENSION_NAME ${TARGET_NAME}_loadable_extension)
 
-project(${TARGET_NAME} LANGUAGES CXX)
-
 # C++20 standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+project(${TARGET_NAME} LANGUAGES CXX)
 
 # Include headers
 include_directories(src/include)

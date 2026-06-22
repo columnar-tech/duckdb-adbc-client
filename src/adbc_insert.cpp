@@ -412,19 +412,15 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline,
     }
     return SinkFinalizeType::READY;
 }
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
 SourceResultType AdbcInsert::GetDataInternal(ExecutionContext &context,
                                              DataChunk &chunk,
                                              OperatorSourceInput &input) const {
-#else
-SourceResultType AdbcInsert::GetData(ExecutionContext &context, DataChunk &chunk, OperatorSourceInput &input) const {
-#endif
     auto &gstate = sink_state->Cast<AdbcInsertGlobalState>();
     {
         // Acquire the lock before fetching the insert count
         unique_lock<mutex> state_lock(gstate.insert_mutex);
-        chunk.SetCardinality(1);
-        chunk.SetValue(0, 0, Value::BIGINT(gstate.insert_count));
+        chunk.SetChildCardinality(1);
+        chunk.data[0].SetValue(0, Value::BIGINT(gstate.insert_count));
     }
     return SourceResultType::FINISHED;
 }

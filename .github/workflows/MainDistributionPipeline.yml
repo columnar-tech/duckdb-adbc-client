@@ -1,105 +1,90 @@
-name: Main Extension Distribution Pipeline
+name: Extension Distribution Pipeline (main)
 on:
   push:
+    branches:
+      - main
   pull_request:
+    branches:
+      - main
   workflow_dispatch:
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: true
-
 jobs:
-   duckdb-build-v1-4:
-     name: Build extension binaries (v1.4)
-     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4-andium
-     with:
-       duckdb_version: v1.4-andium
-       ci_tools_version: v1.4-andium
-       extension_name: adbc
-       skip_tests: true
+  duckdb-build-next:
+    name: Build extension binaries (main)
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
+    with:
+      duckdb_version: main
+      ci_tools_version: main
+      extension_name: adbc
+      skip_tests: true
 
-   duckdb-build-v1-5:
-     name: Build extension binaries (v1.5)
-     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
-     with:
-       duckdb_version: v1.5-variegata
-       ci_tools_version: v1.5-variegata
-       extension_name: adbc
-       skip_tests: true
+  duckdb-build-stable:
+    name: Build extension binaries (stable)
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+    with:
+      duckdb_version: v1.5-variegata
+      ci_tools_version: v1.5-variegata
+      extension_name: adbc
+      skip_tests: true
 
-   code-quality-check:
-     name: Code Quality Check
-     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
-     with:
-       duckdb_version: v1.5-variegata
-       ci_tools_version: v1.5-variegata
-       extension_name: adbc
-       format_checks: 'format;tidy'
+  code-quality-check:
+    name: Code Quality Check
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
+    with:
+      duckdb_version: main
+      ci_tools_version: main
+      extension_name: adbc
+      format_checks: 'format;tidy'
 
-   test:
-     name: Test ${{ matrix.duckdb_version }} on ${{ matrix.os }}
-     runs-on: ${{ matrix.os }}
-     strategy:
-       fail-fast: true
-       matrix:
-         os: [ubuntu-latest, macos-latest, windows-latest]
-         duckdb_version: [v1.4-andium, v1.5-variegata]
-         include:
-           - os: ubuntu-latest
-             arch: linux_amd64
-           - os: macos-latest
-             arch: osx_arm64
-           - os: windows-latest
-             arch: windows_amd64
-     steps:
-       - uses: actions/checkout@v4
-         with:
-           fetch-depth: 0
-           submodules: 'recursive'
-          
-       - uses: columnar-tech/setup-dbc@v1
-       
-       - name: Install ADBC Drivers
-         run: |
-           dbc install sqlite
-           dbc install datafusion 
-      
-       - name: Build
-         shell: bash
-         env:
-           DUCKDB_VERSION: ${{ matrix.duckdb_version }}
-         run: GEN=ninja make release
+  test:
+    name: Test ${{ matrix.duckdb_version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        duckdb_version: [main, v1.5-variegata]
+        include:
+          - os: ubuntu-latest
+            arch: linux_amd64
+          - os: macos-latest
+            arch: osx_arm64
+          - os: windows-latest
+            arch: windows_amd64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: 'recursive'
+      - uses: columnar-tech/setup-dbc@v1
+      - name: Install ADBC Drivers
+        run: |
+          dbc install sqlite
+          dbc install datafusion
+      - name: Build
+        shell: bash
+        env:
+          DUCKDB_VERSION: ${{ matrix.duckdb_version }}
+        run: GEN=ninja make release
+      - name: Run tests (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: ./build/release/test/unittest
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          & .\build\release\test\unittest.exe test\
 
-       - name: Run tests (Linux/macOS)
-         if: runner.os != 'Windows'
-         shell: bash
-         run: GEN=ninja make test 
-
-       - name: Run tests (Windows)
-         if: runner.os == 'Windows'
-         shell: pwsh
-         run: |
-           # Use native PowerShell calling semantics and folder parsing
-           & .\build\release\test\unittest.exe test\
-      
-   deploy-v1-4:
-     name: Deploy extension binaries (v1.4)
-     needs: [duckdb-build-v1-4, test]
-     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-     uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.4-andium
-     secrets: inherit
-     with:
-       duckdb_version: v1.4-andium
-       ci_tools_version: v1.4-andium
-       extension_name: adbc
-
-   deploy-v1-5:
-     name: Deploy extension binaries (v1.5)
-     needs: [duckdb-build-v1-5, test]
-     if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
-     uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
-     secrets: inherit
-     with:
-       duckdb_version: v1.5-variegata
-       ci_tools_version: v1.5-variegata
-       extension_name: adbc
+  deploy-stable:
+    name: Deploy extension binaries (stable)
+    needs: [duckdb-build-stable, test]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
+    secrets: inherit
+    with:
+      duckdb_version: v1.5-variegata
+      ci_tools_version: v1.5-variegata
+      extension_name: adbc

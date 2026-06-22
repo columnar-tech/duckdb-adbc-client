@@ -56,7 +56,6 @@ unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, 
     // Create and return the wrapper owning the stream for DuckDB
     auto wrapper = make_uniq<ArrowArrayStreamWrapper>();
     std::memcpy(&wrapper->arrow_array_stream, &adbc_stream, sizeof(ArrowArrayStream));
-    wrapper->number_of_rows = rows_affected;
     return wrapper;
 }
 
@@ -87,11 +86,7 @@ AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, uni
         CHECK_ADBC(schema_status, BinderException);
     }
 
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
     ArrowTableFunction::PopulateArrowTableSchema(context, arrow_table, schema_root.arrow_schema);
-#else
-    ArrowTableFunction::PopulateArrowTableSchema(DBConfig::GetConfig(context), arrow_table, schema_root.arrow_schema);
-#endif
 }
 
 void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChunk &output) {
@@ -125,28 +120,16 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
     // Handle the case where we don't need all of the columns
     if (global_state.CanRemoveFilterColumns()) {
         local_state.all_columns.Reset();
-        local_state.all_columns.SetCardinality(output_size);
+        local_state.all_columns.SetChildCardinality(output_size);
 
         ArrowTableFunction::ArrowToDuckDB(local_state,
                                           function_data.arrow_table.GetColumns(),
                                           local_state.all_columns,
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-#else
-                                          function_data.lines_read - output_size,
-#endif
                                           false);
         output.ReferenceColumns(local_state.all_columns, global_state.projection_ids);
     } else {
-        output.SetCardinality(output_size);
-        ArrowTableFunction::ArrowToDuckDB(local_state,
-                                          function_data.arrow_table.GetColumns(),
-                                          output,
-
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
-#else
-                                          function_data.lines_read - output_size,
-#endif
-                                          false);
+        output.SetChildCardinality(output_size);
+        ArrowTableFunction::ArrowToDuckDB(local_state, function_data.arrow_table.GetColumns(), output, false);
     }
 
     output.Verify();

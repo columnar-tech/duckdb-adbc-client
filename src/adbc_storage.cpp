@@ -30,12 +30,7 @@ static unique_ptr<Catalog> AdbcAttach(optional_ptr<StorageExtensionInfo> storage
                                       AttachInfo &info,
                                       AttachOptions &attach_options) {
 
-#if DUCKDB_MAJOR_VERSION >= 1 && DUCKDB_MINOR_VERSION >= 5
     if (!Settings::Get<EnableExternalAccessSetting>(context)) {
-#else
-    auto &config = DBConfig::GetConfig(context);
-    if (!config.options.enable_external_access) {
-#endif
         throw PermissionException("Attaching via ADBC is turned off through configuration.");
     }
 
