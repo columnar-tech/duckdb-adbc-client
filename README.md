@@ -109,8 +109,11 @@ curl -o games.sqlite "http://data.columnar.tech/games.sqlite"
 To read data through ADBC you can call the `read_adbc` table function by providing a URI to a connection profile and a SQL query. 
 
 ```sql
+-- Install the extension
 D INSTALL adbc FROM 'https://columnar-tech.github.io/duckdb-adbc-client';
+-- Load it
 D LOAD adbc;
+-- Read from the ADBC database using read_adbc
 D SELECT * FROM read_adbc('profile://mydb', 'SELECT * FROM games');
 ┌───────┬────────────┬─────────────────────┬─────────┬─────────┬─────────────┬─────────────┬────────────┐
 │  id   │    name    │      inventor       │  year   │ min_age │ min_players │ max_players │ list_price │
@@ -129,8 +132,11 @@ D SELECT * FROM read_adbc('profile://mydb', 'SELECT * FROM games');
 To create a persistent connection to an ADBC database, you can run the `ATTACH` command and then query the ADBC database as if it were a local DuckDB database. We currently support catalog lookups, as well as `SELECT`, `INSERT`, `COPY`, and `CREATE TABLE AS (SELECT ...)` (`CTAS`) statements.
 
 ```sql
+-- Create a persistent connection to the SQLite database
 D ATTACH 'profile://mydb' AS mydb (TYPE adbc);
+-- Set the default schema
 D USE mydb.main;
+-- Display all tables in the attached ADBC database
 D SHOW ALL TABLES;
 ┌──────────┬─────────┬─────────┬───────────────────────────────┬────────────────────────────────┬───────────┐
 │ database │ schema  │  name   │         column_names          │          column_types          │ temporary │
@@ -140,6 +146,7 @@ D SHOW ALL TABLES;
 │          │         │         │  min_age, min_players,        │  VARCHAR, BIGINT, BIGINT,      │           │
 │          │         │         │  max_players, list_price]     │  BIGINT, VARCHAR]              │           │
 └──────────┴─────────┴─────────┴───────────────────────────────┴────────────────────────────────┴───────────┘
+-- Read directly from the attached ADBC table
 D SELECT * FROM games;
 ┌───────┬────────────┬─────────────────────┬─────────┬─────────┬─────────────┬─────────────┬────────────┐
 │  id   │    name    │      inventor       │  year   │ min_age │ min_players │ max_players │ list_price │
@@ -151,6 +158,7 @@ D SELECT * FROM games;
 │     4 │ Candy Land │ Eleanor Abbott      │ 1948    │       3 │           2 │           4 │ 7.99       │
 │     5 │ Risk       │ Albert Lamorisse    │ 1957    │      10 │           2 │           5 │ 29.99      │
 └───────┴────────────┴─────────────────────┴─────────┴─────────┴─────────────┴─────────────┴────────────┘
+-- Insert into the ADBC database
 D INSERT INTO games (SELECT 6, 'Battleship', 'Clifford Von Wickler', 1931, 7, 2, 2, 12.99);
 D SELECT * FROM games;
 ┌───────┬────────────┬──────────────────────┬─────────┬─────────┬─────────────┬─────────────┬────────────┐
@@ -168,6 +176,7 @@ D SELECT * FROM games;
 D USE memory;
 D CREATE TABLE inventors AS (SELECT id, inventor FROM mydb.main.games);
 D USE mydb.main;
+-- Create a new table in the attached ADBC database
 D CREATE TABLE game_inventors(id, inventor) AS (SELECT * FROM memory.inventors);
 D SELECT * FROM game_inventors;
 ┌───────┬──────────────────────┐
