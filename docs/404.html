@@ -7,7 +7,7 @@
 <body>
 <script>
   // DuckDB requests: /v1.5.4/linux_amd64/adbc.duckdb_extension.gz
-  // Release asset:   adbc.duckdb_extension-duckdb-1.5.4-linux_amd64.gz
+  // Release asset:   adbc.duckdb_extension-duckdb-1.5.4-linux_amd64
   // Release tag:     v0.0.1-duckdb1.5.4
 
   const REPO = "columnar-tech/duckdb-adbc-client";
@@ -22,7 +22,8 @@
     const duckdbVersion = match[1].replace(/^v/, ""); // e.g. 1.5.4
     const platform = match[2];                        // e.g. linux_amd64
     const tag = `v0.0.1-duckdb${duckdbVersion}`;
-    const assetName = `adbc.duckdb_extension-duckdb-${duckdbVersion}-${platform}.gz`;
+    // Asset is decompressed — no .gz suffix
+    const assetName = `adbc.duckdb_extension-duckdb-${duckdbVersion}-${platform}`;
     const url = `https://github.com/${REPO}/releases/download/${tag}/${assetName}`;
 
     window.location.replace(url);
