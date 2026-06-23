@@ -101,7 +101,7 @@ We showcase the functionality of the ADBC extension using a `games` database.
 You can load the `games` database into DuckDB by running:
 
 ```sql
-D CREATE TABLE games AS (SELECT * FROM 'https://github.com/columnar-tech/adbc-quickstarts/raw/refs/heads/main/python/duckdb/duckdb/games.duckdb');
+D CREATE TABLE games AS (SELECT * FROM 'http://data.columnar.tech/games.duckdb');
 ```
 
 ### read_adbc
