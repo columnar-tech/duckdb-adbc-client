@@ -101,7 +101,7 @@ We showcase the functionality of the ADBC extension using a `games` database.
 You can download the `games` database as a SQLite file with:
 
 ```sh
-curl -o games.sqlite "http://data.columnar.tech/games.sqlite"
+curl -o games.sqlite "https://data.columnar.tech/games.sqlite"
 ```
 
 ### read_adbc
