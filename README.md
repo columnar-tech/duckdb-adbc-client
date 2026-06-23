@@ -172,11 +172,9 @@ D SELECT * FROM games;
 │     5 │ Risk       │ Albert Lamorisse     │ 1957    │      10 │           2 │           5 │ 29.99      │
 │     6 │ Battleship │ Clifford Von Wickler │ 1931    │       7 │           2 │           2 │ 12.99      │
 └───────┴────────────┴──────────────────────┴─────────┴─────────┴─────────────┴─────────────┴────────────┘
--- Create a local copy of the game inventors
-D USE memory;
-D CREATE TABLE inventors AS (SELECT id, inventor FROM mydb.main.games);
-D USE mydb.main;
--- Create a new table in the attached ADBC database
+-- Create a local table in DuckDB of the inventors of each game
+D CREATE TABLE memory.inventors AS (SELECT id, inventor FROM games);
+-- Create a new table in the attached ADBC database (SQLite) of the inventors
 D CREATE TABLE game_inventors(id, inventor) AS (SELECT * FROM memory.inventors);
 D SELECT * FROM game_inventors;
 ┌───────┬──────────────────────┐
