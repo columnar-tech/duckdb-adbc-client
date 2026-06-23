@@ -96,6 +96,14 @@ move "mydb.toml" "%LOCALAPPDATA%\ADBC\Profiles\"
 
 ## Quickstart
 
+We showcase the functionality of the ADBC extension using a `games` database.
+
+You can load the `games` database into DuckDB by running:
+
+```sql
+D CREATE TABLE games AS (SELECT * FROM 'https://github.com/columnar-tech/adbc-quickstarts/raw/refs/heads/main/python/duckdb/duckdb/games.duckdb');
+```
+
 ### read_adbc
 
 To read data through ADBC you can call the `read_adbc` table function by providing a URI to a connection profile and a SQL query. 
