@@ -17,7 +17,7 @@ By building on Arrow, ADBC enables:
 You can install the ADBC extension by running:
 
 ```sql
-INSTALL adbc FROM community;
+INSTALL adbc FROM 'https://columnar-tech.github.io/duckdb-adbc-client';
 LOAD adbc;
 ```
 
