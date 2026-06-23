@@ -14,7 +14,13 @@ By building on Arrow, ADBC enables:
 
 ## Extension Installation
 
-You can install the ADBC extension by running:
+You can install the ADBC extension by running DuckDB in unsigned mode:
+
+```sh
+duckdb -unsigned
+```
+
+Then you can install the extension by running:
 
 ```sql
 INSTALL adbc FROM 'https://columnar-tech.github.io/duckdb-adbc-client';
@@ -64,17 +70,17 @@ LOAD adbc;
 After installing `dbc`, you can run `dbc install <system>` to install a driver for a new system.
 
 ```sh
-dbc install postgresql
+dbc install sqlite
 ```
 
 To easily manage connection information for each system, you can create a [connection profile](https://arrow.apache.org/adbc/main/format/connection_profiles.html) for each driver (i.e., `mydb.toml`):
 
 ```toml
 profile_version = 1
-driver = "postgresql"
+driver = "sqlite"
 
 [Options]
-uri = "postgresql://localhost:5432/demo"
+uri = "./games.sqlite"
 ```
 
 The last step is to save your profile in the correct location:
@@ -90,36 +96,35 @@ move "mydb.toml" "%LOCALAPPDATA%\ADBC\Profiles\"
 
 ## Quickstart
 
+We showcase the functionality of the ADBC extension using a `games` database.
+
+You can download the `games` database as a SQLite file with:
+
+```sh
+curl -o games.sqlite "http://data.columnar.tech/games.sqlite"
+```
+
 ### read_adbc
 
 To read data through ADBC you can call the `read_adbc` table function by providing a URI to a connection profile and a SQL query. 
 
 ```sql
+-- Install the extension
+D INSTALL adbc FROM 'https://columnar-tech.github.io/duckdb-adbc-client';
+-- Load it
+D LOAD adbc;
+-- Read from the ADBC database using read_adbc
 D SELECT * FROM read_adbc('profile://mydb', 'SELECT * FROM games');
-┌───────┬────────────┬─────────────────────┬───────┬─────────┬─────────────┬─────────────┬────────────┐
-│  id   │    name    │      inventor       │ year  │ min_age │ min_players │ max_players │ list_price │
-│ int32 │  varchar   │       varchar       │ int16 │  int16  │    int16    │    int16    │  varchar   │
-├───────┼────────────┼─────────────────────┼───────┼─────────┼─────────────┼─────────────┼────────────┤
-│     1 │ Monopoly   │ Elizabeth Magie     │  1903 │       8 │           2 │           6 │ 19.99      │
-│     2 │ Scrabble   │ Alfred Mosher Butts │  1938 │       8 │           2 │           4 │ 17.99      │
-│     3 │ Clue       │ Anthony E. Pratt    │  1944 │       8 │           2 │           6 │ 9.99       │
-│     4 │ Candy Land │ Eleanor Abbott      │  1948 │       3 │           2 │           4 │ 7.99       │
-│     5 │ Risk       │ Albert Lamorisse    │  1957 │      10 │           2 │           5 │ 29.99      │
-└───────┴────────────┴─────────────────────┴───────┴─────────┴─────────────┴─────────────┴────────────┘
-```
-
-### adbc_execute
-
-To perform arbitrary operations via ADBC, you can call `adbc_execute`.
-
-```sql
-D CALL adbc_execute('profile://mydb', 'DROP TABLE public.games');
-┌─────────┐
-│ Success │
-│ boolean │
-├─────────┤
-│ true    │
-└─────────┘
+┌───────┬────────────┬─────────────────────┬─────────┬─────────┬─────────────┬─────────────┬────────────┐
+│  id   │    name    │      inventor       │  year   │ min_age │ min_players │ max_players │ list_price │
+│ int64 │  varchar   │       varchar       │ varchar │  int64  │    int64    │    int64    │  varchar   │
+├───────┼────────────┼─────────────────────┼─────────┼─────────┼─────────────┼─────────────┼────────────┤
+│     1 │ Monopoly   │ Elizabeth Magie     │ 1903    │       8 │           2 │           6 │ 19.99      │
+│     2 │ Scrabble   │ Alfred Mosher Butts │ 1938    │       8 │           2 │           4 │ 17.99      │
+│     3 │ Clue       │ Anthony E. Pratt    │ 1944    │       8 │           2 │           6 │ 9.99       │
+│     4 │ Candy Land │ Eleanor Abbott      │ 1948    │       3 │           2 │           4 │ 7.99       │
+│     5 │ Risk       │ Albert Lamorisse    │ 1957    │      10 │           2 │           5 │ 29.99      │
+└───────┴────────────┴─────────────────────┴─────────┴─────────┴─────────────┴─────────────┴────────────┘
 ```
 
 ### ATTACH
@@ -127,44 +132,54 @@ D CALL adbc_execute('profile://mydb', 'DROP TABLE public.games');
 To create a persistent connection to an ADBC database, you can run the `ATTACH` command and then query the ADBC database as if it were a local DuckDB database. We currently support catalog lookups, as well as `SELECT`, `INSERT`, `COPY`, and `CREATE TABLE AS (SELECT ...)` (`CTAS`) statements.
 
 ```sql
+-- Create a persistent connection to the SQLite database
 D ATTACH 'profile://mydb' AS mydb (TYPE adbc);
-D USE mydb.public;
+-- Set the default schema
+D USE mydb.main;
+-- Display all tables in the attached ADBC database
 D SHOW ALL TABLES;
-┌──────────┬─────────┬─────────┬──────────────────────┬──────────────────────────────────────────────────┬───────────┐
-│ database │ schema  │  name   │     column_names     │                   column_types                   │ temporary │
-│ varchar  │ varchar │ varchar │      varchar[]       │                    varchar[]                     │  boolean  │
-├──────────┼─────────┼─────────┼──────────────────────┼──────────────────────────────────────────────────┼───────────┤
-│ mydb     │ public  │ games   │ [id, name, invento…  │ [INTEGER, VARCHAR, VARCHAR, SMALLINT, SMALLINT…  │ false     │
-└──────────┴─────────┴─────────┴──────────────────────┴──────────────────────────────────────────────────┴───────────┘
+┌──────────┬─────────┬─────────┬───────────────────────────────┬────────────────────────────────┬───────────┐
+│ database │ schema  │  name   │         column_names          │          column_types          │ temporary │
+│ varchar  │ varchar │ varchar │           varchar[]           │           varchar[]            │  boolean  │
+├──────────┼─────────┼─────────┼───────────────────────────────┼────────────────────────────────┼───────────┤
+│ mydb     │ main    │ games   │ [id, name, inventor, year,    │ [BIGINT, VARCHAR, VARCHAR,     │ false     │
+│          │         │         │  min_age, min_players,        │  VARCHAR, BIGINT, BIGINT,      │           │
+│          │         │         │  max_players, list_price]     │  BIGINT, VARCHAR]              │           │
+└──────────┴─────────┴─────────┴───────────────────────────────┴────────────────────────────────┴───────────┘
+-- Read directly from the attached ADBC table
 D SELECT * FROM games;
-┌───────┬────────────┬─────────────────────┬───────┬─────────┬─────────────┬─────────────┐
-│  id   │    name    │      inventor       │ year  │ min_age │ min_players │ max_players │
-│ int32 │  varchar   │       varchar       │ int16 │  int16  │    int16    │    int16    │
-├───────┼────────────┼─────────────────────┼───────┼─────────┼─────────────┼─────────────┤
-│     1 │ Monopoly   │ Elizabeth Magie     │  1903 │       8 │           2 │           6 │
-│     2 │ Scrabble   │ Alfred Mosher Butts │  1938 │       8 │           2 │           4 │
-│     3 │ Clue       │ Anthony E. Pratt    │  1944 │       8 │           2 │           6 │
-│     4 │ Candy Land │ Eleanor Abbott      │  1948 │       3 │           2 │           4 │
-│     5 │ Risk       │ Albert Lamorisse    │  1957 │      10 │           2 │           5 │
-└───────┴────────────┴─────────────────────┴───────┴─────────┴─────────────┴─────────────┘
-D INSERT INTO games (SELECT 6, 'Battleship', 'Clifford Von Wickler', 1931, 7, 2, 2);
+┌───────┬────────────┬─────────────────────┬─────────┬─────────┬─────────────┬─────────────┬────────────┐
+│  id   │    name    │      inventor       │  year   │ min_age │ min_players │ max_players │ list_price │
+│ int64 │  varchar   │       varchar       │ varchar │  int64  │    int64    │    int64    │  varchar   │
+├───────┼────────────┼─────────────────────┼─────────┼─────────┼─────────────┼─────────────┼────────────┤
+│     1 │ Monopoly   │ Elizabeth Magie     │ 1903    │       8 │           2 │           6 │ 19.99      │
+│     2 │ Scrabble   │ Alfred Mosher Butts │ 1938    │       8 │           2 │           4 │ 17.99      │
+│     3 │ Clue       │ Anthony E. Pratt    │ 1944    │       8 │           2 │           6 │ 9.99       │
+│     4 │ Candy Land │ Eleanor Abbott      │ 1948    │       3 │           2 │           4 │ 7.99       │
+│     5 │ Risk       │ Albert Lamorisse    │ 1957    │      10 │           2 │           5 │ 29.99      │
+└───────┴────────────┴─────────────────────┴─────────┴─────────┴─────────────┴─────────────┴────────────┘
+-- Insert into the ADBC database
+D INSERT INTO games (SELECT 6, 'Battleship', 'Clifford Von Wickler', 1931, 7, 2, 2, 12.99);
 D SELECT * FROM games;
-┌───────┬────────────┬──────────────────────┬───────┬─────────┬─────────────┬─────────────┐
-│  id   │    name    │       inventor       │ year  │ min_age │ min_players │ max_players │
-│ int32 │  varchar   │       varchar        │ int16 │  int16  │    int16    │    int16    │
-├───────┼────────────┼──────────────────────┼───────┼─────────┼─────────────┼─────────────┤
-│     1 │ Monopoly   │ Elizabeth Magie      │  1903 │       8 │           2 │           6 │
-│     2 │ Scrabble   │ Alfred Mosher Butts  │  1938 │       8 │           2 │           4 │
-│     3 │ Clue       │ Anthony E. Pratt     │  1944 │       8 │           2 │           6 │
-│     4 │ Candy Land │ Eleanor Abbott       │  1948 │       3 │           2 │           4 │
-│     5 │ Risk       │ Albert Lamorisse     │  1957 │      10 │           2 │           5 │
-│     6 │ Battleship │ Clifford Von Wickler │  1931 │       7 │           2 │           2 │
-└───────┴────────────┴──────────────────────┴───────┴─────────┴─────────────┴─────────────┘
-D CREATE TABLE game_inventors(id, inventor) AS (SELECT id, inventor FROM games);
+┌───────┬────────────┬──────────────────────┬─────────┬─────────┬─────────────┬─────────────┬────────────┐
+│  id   │    name    │       inventor       │  year   │ min_age │ min_players │ max_players │ list_price │
+│ int64 │  varchar   │       varchar        │ varchar │  int64  │    int64    │    int64    │  varchar   │
+├───────┼────────────┼──────────────────────┼─────────┼─────────┼─────────────┼─────────────┼────────────┤
+│     1 │ Monopoly   │ Elizabeth Magie      │ 1903    │       8 │           2 │           6 │ 19.99      │
+│     2 │ Scrabble   │ Alfred Mosher Butts  │ 1938    │       8 │           2 │           4 │ 17.99      │
+│     3 │ Clue       │ Anthony E. Pratt     │ 1944    │       8 │           2 │           6 │ 9.99       │
+│     4 │ Candy Land │ Eleanor Abbott       │ 1948    │       3 │           2 │           4 │ 7.99       │
+│     5 │ Risk       │ Albert Lamorisse     │ 1957    │      10 │           2 │           5 │ 29.99      │
+│     6 │ Battleship │ Clifford Von Wickler │ 1931    │       7 │           2 │           2 │ 12.99      │
+└───────┴────────────┴──────────────────────┴─────────┴─────────┴─────────────┴─────────────┴────────────┘
+-- Create a local table in DuckDB of the inventors of each game
+D CREATE TABLE memory.inventors AS (SELECT id, inventor FROM games);
+-- Create a new table in the attached ADBC database (SQLite) of the inventors
+D CREATE TABLE game_inventors(id, inventor) AS (SELECT * FROM memory.inventors);
 D SELECT * FROM game_inventors;
 ┌───────┬──────────────────────┐
 │  id   │       inventor       │
-│ int32 │       varchar        │
+│ int64 │       varchar        │
 ├───────┼──────────────────────┤
 │     1 │ Elizabeth Magie      │
 │     2 │ Alfred Mosher Butts  │
@@ -181,6 +196,20 @@ By default, `ATTACH` delimits all SQL queries with double quotes (i.e., `SELECT 
 
 ```sql
 D ATTACH 'profile://mydb' AS mydb (TYPE adbc, DELIMITER '[]');
+```
+
+### adbc_execute
+
+To perform arbitrary operations via ADBC, you can call `adbc_execute`.
+
+```sql
+D CALL adbc_execute('profile://mydb', 'DROP TABLE games');
+┌─────────┐
+│ Success │
+│ boolean │
+├─────────┤
+│ true    │
+└─────────┘
 ```
 
 ### adbc_clear_cache
@@ -212,14 +241,15 @@ See [Issue #1](https://github.com/columnar-tech/duckdb-adbc-client/issues/1) and
 To push down projections or predicates, you can directly call `read_adbc` with a SQL query.
 
 ```sql
+D USE memory;
 D CREATE MACRO read_mydb(query) AS TABLE SELECT * FROM read_adbc('profile://mydb', query);
-D SELECT inventor FROM read_mydb('SELECT inventor FROM games WHERE name = ''Monopoly''')
-┌─────────────────────┐
-│      inventor       │
-│       varchar       │
-├─────────────────────│
-│ Elizabeth Magie     │
-└─────────────────────┘
+D SELECT inventor FROM read_mydb('SELECT inventor FROM games WHERE name = ''Monopoly''');
+┌─────────────────┐
+│    inventor     │
+│     varchar     │
+├─────────────────┤
+│ Elizabeth Magie │
+└─────────────────┘
 ```
 
 ### Connecting to DuckDB or Quack
@@ -235,6 +265,7 @@ The ADBC extension does not currently support concurrent ADBC operations within 
 By default, mixing ADBC reads and writes in the same SQL statement will throw an error to prevent potential concurrency bugs. To override this warning and enable mixing ADBC reads and writes, you can set `adbc_mix_reads_writes` to `true`.
 
 ```sql
+D USE mydb.main;
 D INSERT INTO games (SELECT * FROM games);
 Not implemented Error: ...
 D SET adbc_mix_reads_writes = true;
