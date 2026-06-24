@@ -407,8 +407,10 @@ SinkFinalizeType AdbcInsert::Finalize(Pipeline &pipeline,
     CHECK_ADBC(gstate.status, IOException);
 
     // Validate the affected row count
-    if (static_cast<idx_t>(gstate.rows_affected) != gstate.insert_count) {
-        throw IOException("Row count mismatch: expected %llu, got %lld", gstate.insert_count, gstate.rows_affected);
+    if (gstate.rows_affected != -1) {
+        if (static_cast<idx_t>(gstate.rows_affected) != gstate.insert_count) {
+            throw IOException("Row count mismatch: expected %llu, got %lld", gstate.insert_count, gstate.rows_affected);
+        }
     }
     return SinkFinalizeType::READY;
 }
