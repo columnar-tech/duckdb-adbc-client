@@ -23,7 +23,7 @@ duckdb -unsigned
 Then you can install the extension by running:
 
 ```sql
-INSTALL adbc FROM 'https://columnar-tech.github.io/duckdb-adbc-client';
+INSTALL adbc FROM 'http://duckdb.columnar.tech';
 LOAD adbc;
 ```
 
