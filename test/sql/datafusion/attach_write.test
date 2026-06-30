@@ -4,6 +4,8 @@
 
 require adbc
 
+require-env ADBC_DRIVER_PATH
+
 statement ok
 SET threads = 1
 
