@@ -4,6 +4,8 @@
 
 require adbc
 
+require-env ADBC_DRIVER_PATH
+
 statement ok
 ATTACH 'profile://./test/empty.toml' AS sqlite_db (TYPE adbc)
 

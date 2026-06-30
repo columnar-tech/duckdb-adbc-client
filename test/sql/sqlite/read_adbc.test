@@ -4,6 +4,8 @@
 
 require adbc
 
+require-env ADBC_DRIVER_PATH
+
 statement ok
 CREATE OR REPLACE MACRO penguins(query := 'SELECT * FROM penguins') AS TABLE
     SELECT * FROM read_adbc('profile://./test/penguins.toml', query)

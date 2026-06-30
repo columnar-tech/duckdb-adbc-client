@@ -4,6 +4,8 @@
 
 require adbc
 
+require-env ADBC_DRIVER_PATH
+
 # Now attach to the sqlite database
 statement ok
 ATTACH 'profile://./test/penguins.toml' AS sqlite_db (TYPE adbc);
