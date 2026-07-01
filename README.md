@@ -14,16 +14,10 @@ By building on Arrow, ADBC enables:
 
 ## Extension Installation
 
-You can install the ADBC extension by running DuckDB in unsigned mode:
-
-```sh
-duckdb -unsigned
-```
-
-Then you can install the extension by running:
+Then you can install the extension from DuckDB by running:
 
 ```sql
-INSTALL adbc FROM 'http://duckdb.columnar.tech';
+INSTALL adbc FROM community;
 LOAD adbc;
 ```
 
