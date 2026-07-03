@@ -42,29 +42,33 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntryInternal(ClientContext &cont
         return nullptr;
     }
 
-    // Create the entry to be inserted
-    auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
+    try {
+        // Create the entry to be inserted
+        auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
 
-    // Bind a SQL statement and use ADBC to retrieve the metadata for the table
-    string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name, table_name);
+        // Bind a SQL statement and use ADBC to retrieve the metadata for the table
+        string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name, table_name);
 
-    auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
-    auto bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+        auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
+        auto bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
 
-    auto col_names = bind_data->arrow_table.GetNames();
-    auto col_types = bind_data->arrow_table.GetTypes();
-    auto table_info = make_uniq<CreateTableInfo>(*this, table_name);
-    for (idx_t i = 0; i < col_names.size(); i++) {
-        ColumnDefinition col(col_names[i], col_types[i]);
-        table_info->columns.AddColumn(std::move(col));
+        auto col_names = bind_data->arrow_table.GetNames();
+        auto col_types = bind_data->arrow_table.GetTypes();
+        auto table_info = make_uniq<CreateTableInfo>(*this, table_name);
+        for (idx_t i = 0; i < col_names.size(); i++) {
+            ColumnDefinition col(col_names[i], col_types[i]);
+            table_info->columns.AddColumn(std::move(col));
+        }
+        table_info->internal = false;
+
+        // Insert the entry
+        auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
+        auto ptr = table_entry.get();
+        owned_tables[table_name] = std::move(table_entry);
+        return ptr;
+    } catch (...) {
+        return nullptr;
     }
-    table_info->internal = false;
-
-    // Insert the entry
-    auto table_entry = make_uniq<AdbcTableEntry>(catalog, *this, *table_info);
-    auto ptr = table_entry.get();
-    owned_tables[table_name] = std::move(table_entry);
-    return ptr;
 }
 
 CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, const string &table_name) {
@@ -74,11 +78,7 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntry(ClientContext &context, con
 
 optional_ptr<CatalogEntry> AdbcSchemaEntry::LookupEntry(CatalogTransaction transaction,
                                                         const EntryLookupInfo &lookup_info) {
-    try {
-        return GetOrCreateTableEntry(transaction.GetContext(), lookup_info.GetEntryName());
-    } catch (...) {
-        return nullptr;
-    }
+    return GetOrCreateTableEntry(transaction.GetContext(), lookup_info.GetEntryName());
 }
 
 void AdbcSchemaEntry::Scan(ClientContext &context,
@@ -101,7 +101,7 @@ void AdbcSchemaEntry::Scan(ClientContext &context,
         auto schema_name = adbc_catalog.GetInternalSchemaName(name);
         auto table_names = adbc_catalog.FetchTableNames(schema_name);
 
-        // Next fo reach table name, create an entry for it
+        // Next for each table name, create an entry for it
         for (const auto &table_name : table_names) {
             GetOrCreateTableEntryInternal(context, table_name);
         }
