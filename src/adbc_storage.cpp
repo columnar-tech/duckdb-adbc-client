@@ -41,13 +41,13 @@ static unique_ptr<Catalog> AdbcAttach(optional_ptr<StorageExtensionInfo> storage
     for (auto &[option, input_value] : attach_options.options) {
         if (StringUtil::Lower(option) == "delimiter") {
             auto value = input_value.ToString();
-            if (value.size() != 2) {
+            if (value.size() > 2) {
                 throw InvalidInputException("Invalid value \"%s\" for DELIMITER. It "
-                                            "must be exactly two characters.",
+                                            "must be empty or at most two characters.",
                                             value);
             }
             delimiter = value;
-            break;
+            continue;
         }
         throw BinderException("Unrecognized option for ADBC attach: %s", option);
     }

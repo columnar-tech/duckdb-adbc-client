@@ -185,3 +185,39 @@ SELECT bill_depth_mm AS a, bill_depth_mm AS b
  WHERE bill_depth_mm = 13.1
 ----
 13.1	13.1
+
+# SHOW TABLES returns table names
+query T
+SHOW TABLES
+----
+penguins
+
+# SHOW SCHEMAS lists database_name, schema_name, current
+query TTT
+SHOW SCHEMAS
+----
+memory	main	false
+sqlite_db	main	true
+
+# SHOW ALL TABLES returns database, schema, name, column_names, column_types, temporary
+query TTTTTT
+SHOW ALL TABLES
+----
+sqlite_db	main	penguins	[species, island, bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g, sex, year]	[VARCHAR, VARCHAR, DOUBLE, DOUBLE, BIGINT, BIGINT, VARCHAR, BIGINT]	false
+
+# duckdb_tables() lists table entries for the catalog
+query T
+SELECT table_name FROM duckdb_tables() WHERE database_name = 'sqlite_db'
+----
+penguins
+
+# ATTACH with DELIMITER '' (no object delimiter) works
+statement ok
+ATTACH 'profile://./test/empty.toml' AS empty_db (TYPE adbc, DELIMITER '')
+
+query T
+SELECT table_name FROM duckdb_tables() WHERE database_name = 'empty_db'
+----
+
+
+

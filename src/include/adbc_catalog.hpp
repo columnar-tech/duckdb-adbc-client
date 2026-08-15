@@ -45,7 +45,10 @@ public:
           catalog_name(FetchCatalogName()) {
 
         cached_schema_names = FetchSchemaNames();
-        no_schemas = (cached_schema_names.size() == 1 && cached_schema_names.front() == "");
+        if (cached_schema_names.empty()) {
+            cached_schema_names.push_back("");
+        }
+        no_schemas = (cached_schema_names.size() == 1 && (cached_schema_names.front() == "" || cached_schema_names.front() == "main"));
     }
 
     bool NoSchemas() {
@@ -57,25 +60,41 @@ public:
     }
 
     string GetExternalSchemaName(const string &schema) {
-        if (no_schemas && schema == "") {
+        if (no_schemas && (schema == "" || schema == "main")) {
             return "main";
         }
         return schema;
     }
 
     string GetInternalSchemaName(const string &schema) {
-        if (no_schemas && schema == "main") {
+        if (no_schemas && (schema == "main" || schema == "")) {
             return "";
         }
         return schema;
     }
 
     string GetDelimitedInternalName(const string &schema, const string &table) {
-        auto quoted_schema = delimiter[0] + GetInternalSchemaName(schema) + delimiter[1];
-        auto quoted_table = delimiter[0] + table + delimiter[1];
+        auto internal_schema = GetInternalSchemaName(schema);
+        string quoted_table;
+        if (delimiter.empty()) {
+            quoted_table = table;
+        } else if (delimiter.size() == 1) {
+            quoted_table = delimiter[0] + table + delimiter[0];
+        } else {
+            quoted_table = delimiter[0] + table + delimiter[1];
+        }
 
-        if (no_schemas) {
+        if (no_schemas || internal_schema.empty()) {
             return quoted_table;
+        }
+
+        string quoted_schema;
+        if (delimiter.empty()) {
+            quoted_schema = internal_schema;
+        } else if (delimiter.size() == 1) {
+            quoted_schema = delimiter[0] + internal_schema + delimiter[0];
+        } else {
+            quoted_schema = delimiter[0] + internal_schema + delimiter[1];
         }
         return quoted_schema + "." + quoted_table;
     }
@@ -94,7 +113,7 @@ public:
                                                   const EntryLookupInfo &schema_lookup,
                                                   OnEntryNotFound if_not_found) override;
     CatalogLookupBehavior CatalogTypeLookupRule(CatalogType type) const override {
-        if (type == CatalogType::TABLE_ENTRY) {
+        if (type == CatalogType::TABLE_ENTRY || type == CatalogType::SCHEMA_ENTRY) {
             return CatalogLookupBehavior::STANDARD;
         }
         return CatalogLookupBehavior::NEVER_LOOKUP;

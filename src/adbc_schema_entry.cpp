@@ -47,10 +47,34 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntryInternal(ClientContext &cont
         auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
 
         // Bind a SQL statement and use ADBC to retrieve the metadata for the table
-        string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name, table_name);
+        string sql = "SELECT * FROM " + adbc_catalog.GetDelimitedInternalName(name, table_name);
+        unique_ptr<AdbcArrowScanFunctionData> bind_data;
 
-        auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
-        auto bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+        try {
+            auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
+            bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+        } catch (...) {
+            // Fallback for MySQL / SingleStore or engines where default quotes fail
+            auto internal_schema = adbc_catalog.GetInternalSchemaName(name);
+            string fallback_sql;
+            if (internal_schema.empty()) {
+                fallback_sql = "SELECT * FROM `" + table_name + "`";
+            } else {
+                fallback_sql = "SELECT * FROM `" + internal_schema + "`.`" + table_name + "`";
+            }
+            try {
+                auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), fallback_sql);
+                bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+            } catch (...) {
+                if (internal_schema.empty()) {
+                    fallback_sql = "SELECT * FROM " + table_name;
+                } else {
+                    fallback_sql = "SELECT * FROM " + internal_schema + "." + table_name;
+                }
+                auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), fallback_sql);
+                bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
+            }
+        }
 
         auto col_names = bind_data->arrow_table.GetNames();
         auto col_types = bind_data->arrow_table.GetTypes();

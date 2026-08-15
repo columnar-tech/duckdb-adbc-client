@@ -76,40 +76,82 @@ string AdbcCatalog::FetchCatalogName() {
     return string(heap_buffer.get());
 }
 
+static string GetArrowString(ArrowArray *array, int64_t idx) {
+    if (!array || idx < 0 || idx >= array->length) {
+        return "";
+    }
+    // Check null bitmap if present
+    if (array->buffers[0]) {
+        const uint8_t *null_bitmap = reinterpret_cast<const uint8_t *>(array->buffers[0]);
+        bool is_valid = (null_bitmap[idx / 8] & (1 << (idx % 8))) != 0;
+        if (!is_valid) {
+            return "";
+        }
+    }
+    if (!array->buffers[1] || !array->buffers[2]) {
+        return "";
+    }
+    const int32_t *offsets = reinterpret_cast<const int32_t *>(array->buffers[1]);
+    const char *data = reinterpret_cast<const char *>(array->buffers[2]);
+    int32_t start = offsets[idx];
+    int32_t end = offsets[idx + 1];
+    if (end < start) {
+        return "";
+    }
+    return string(data + start, end - start);
+}
+
 vector<string> AdbcCatalog::FetchTableNames(const string &schema_name) {
 
     // Collect all table names
     vector<string> table_names;
     auto internal_schema = GetInternalSchemaName(schema_name);
-    ForEachCatalog(internal_schema.c_str(), ADBC_OBJECT_DEPTH_TABLES, [&table_names](ArrowArray *batch) {
-        // Get the catalogs
-        auto *catalogs = batch;
+    ForEachCatalog(nullptr, ADBC_OBJECT_DEPTH_TABLES, [&](ArrowArray *batch) {
+        if (!batch || batch->length == 0 || batch->n_children < 2) return true;
+        auto *catalogs_name_array = batch->children[0];
         auto *catalog_schemas_list = batch->children[1];
-        for (int64_t i = 0; i < catalogs->length; ++i) {
-            auto *schema_offsets = reinterpret_cast<const int32_t *>(catalog_schemas_list->buffers[1]);
-            auto schema_start = schema_offsets[i];
-            auto schema_end = schema_offsets[i + 1];
+        if (!catalog_schemas_list || !catalog_schemas_list->buffers[1]) return true;
+
+        const int32_t *schema_list_offsets = reinterpret_cast<const int32_t *>(catalog_schemas_list->buffers[1]);
+
+        for (int64_t i = 0; i < batch->length; ++i) {
+            string cat_name = GetArrowString(catalogs_name_array, i);
+            auto schema_start = schema_list_offsets[i];
+            auto schema_end = schema_list_offsets[i + 1];
 
             auto *schemas_struct = catalog_schemas_list->children[0];
+            if (!schemas_struct || schemas_struct->n_children < 2) continue;
 
-            // Get the schemas for this catalog
+            auto *schema_name_array = schemas_struct->children[0];
+            auto *tables_list = schemas_struct->children[1];
+            if (!tables_list || !tables_list->buffers[1]) continue;
+
+            const int32_t *table_list_offsets = reinterpret_cast<const int32_t *>(tables_list->buffers[1]);
+
             for (int32_t j = schema_start; j < schema_end; ++j) {
-                auto *tables_list = schemas_struct->children[1];
-                auto *table_offsets = reinterpret_cast<const int32_t *>(tables_list->buffers[1]);
-                auto table_start = table_offsets[j];
-                auto table_end = table_offsets[j + 1];
+                string sch_name = GetArrowString(schema_name_array, j);
+                string effective_schema = !sch_name.empty() ? sch_name : cat_name;
+
+                // Check if this schema/catalog matches target schema_name
+                bool matches = no_schemas || internal_schema.empty() ||
+                               effective_schema == internal_schema || effective_schema == schema_name ||
+                               cat_name == internal_schema || cat_name == schema_name;
+
+                if (!matches) continue;
+
+                auto table_start = table_list_offsets[j];
+                auto table_end = table_list_offsets[j + 1];
 
                 auto *table_struct = tables_list->children[0];
+                if (!table_struct || table_struct->n_children < 1) continue;
+
                 auto *table_names_array = table_struct->children[0];
 
-                auto *name_offsets = reinterpret_cast<const int32_t *>(table_names_array->buffers[1]);
-                auto *name_data = reinterpret_cast<const char *>(table_names_array->buffers[2]);
-
-                // Get the tables for each schema
                 for (int32_t k = table_start; k < table_end; ++k) {
-                    auto start = name_offsets[k];
-                    auto end = name_offsets[k + 1];
-                    table_names.emplace_back(name_data + start, end - start);
+                    string tbl_name = GetArrowString(table_names_array, k);
+                    if (!tbl_name.empty()) {
+                        table_names.push_back(tbl_name);
+                    }
                 }
             }
         }
@@ -130,10 +172,10 @@ void AdbcCatalog::ClearCache() {
 void AdbcCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
     // For each schema, create a catalog entry and execute the callback
     for (auto &schema_name : GetCachedSchemaNames()) {
-        if (auto *entry = GetCatalogEntry(GetInternalSchemaName(schema_name))) {
+        if (auto *entry = GetCatalogEntry(schema_name)) {
             callback(*entry);
         } else {
-            callback(*CreateCatalogEntry(GetInternalSchemaName(schema_name)));
+            callback(*CreateCatalogEntry(schema_name));
         }
     }
 }
@@ -149,7 +191,14 @@ optional_ptr<SchemaCatalogEntry> AdbcCatalog::LookupSchema(CatalogTransaction tr
     }
 
     auto &names = GetCachedSchemaNames();
-    bool found = (std::find(names.begin(), names.end(), internal_name) != names.end());
+    bool found = false;
+    for (auto &name : names) {
+        if (name == internal_name || GetInternalSchemaName(name) == internal_name ||
+            GetExternalSchemaName(name) == schema_lookup.GetEntryName()) {
+            found = true;
+            break;
+        }
+    }
 
     // Throw an exception if the schema doesn't exist
     if (!found) {
@@ -295,10 +344,11 @@ void AdbcCatalog::ForEachCatalog(const char *schema_name,
     auto connection = pool->GetConnection();
     Handle<Private::AdbcError> error = {};
     Handle<ArrowArrayStream> stream = {};
+    const char *db_schema_filter = (schema_name && schema_name[0] != '\0') ? schema_name : nullptr;
     CHECK_ADBC(AdbcConnectionGetObjects(connection->GetRawConnection(),
                                         depth,
                                         catalog_name.empty() ? nullptr : catalog_name.c_str(),
-                                        schema_name,
+                                        db_schema_filter,
                                         nullptr,
                                         nullptr,
                                         nullptr,
@@ -322,21 +372,36 @@ vector<string> AdbcCatalog::FetchSchemaNames() {
     // Collect all schema names from the result
     vector<string> schema_names;
     ForEachCatalog(nullptr, ADBC_OBJECT_DEPTH_DB_SCHEMAS, [&schema_names](ArrowArray *batch) {
+        if (!batch || batch->length == 0 || batch->n_children < 2) return true;
+        auto *catalogs_name_array = batch->children[0];
         auto *catalog_schemas_list = batch->children[1];
+        if (!catalog_schemas_list || !catalog_schemas_list->buffers[1]) return true;
+
+        const int32_t *schema_list_offsets = reinterpret_cast<const int32_t *>(catalog_schemas_list->buffers[1]);
+
         for (int64_t i = 0; i < batch->length; ++i) {
-            auto *schema_offsets = reinterpret_cast<const int32_t *>(catalog_schemas_list->buffers[1]);
-            auto start_idx = schema_offsets[i];
-            auto end_idx = schema_offsets[i + 1];
+            string cat_name = GetArrowString(catalogs_name_array, i);
+            auto start_idx = schema_list_offsets[i];
+            auto end_idx = schema_list_offsets[i + 1];
 
             auto *schemas_struct = catalog_schemas_list->children[0];
+            if (!schemas_struct || schemas_struct->n_children < 1 || start_idx == end_idx) {
+                // MySQL / SingleStore returns databases as catalog_name with empty db_schemas
+                if (!cat_name.empty()) {
+                    schema_names.push_back(cat_name);
+                }
+                continue;
+            }
+
             auto *name_array = schemas_struct->children[0];
-            auto *name_offsets = reinterpret_cast<const int32_t *>(name_array->buffers[1]);
-            auto *name_data = reinterpret_cast<const char *>(name_array->buffers[2]);
 
             for (int32_t j = start_idx; j < end_idx; ++j) {
-                auto name_start = name_offsets[j];
-                auto name_end = name_offsets[j + 1];
-                schema_names.emplace_back(name_data + name_start, name_end - name_start);
+                string sch_name = GetArrowString(name_array, j);
+                if (!sch_name.empty()) {
+                    schema_names.push_back(sch_name);
+                } else if (!cat_name.empty()) {
+                    schema_names.push_back(cat_name);
+                }
             }
         }
         return true;
@@ -349,6 +414,10 @@ const vector<string> &AdbcCatalog::GetCachedSchemaNames() {
     unique_lock<mutex> schemas_lock(schemas_mutex);
     if (!schema_names_loaded) {
         cached_schema_names = FetchSchemaNames();
+        if (cached_schema_names.empty()) {
+            cached_schema_names.push_back("");
+        }
+        no_schemas = (cached_schema_names.size() == 1 && (cached_schema_names.front() == "" || cached_schema_names.front() == "main"));
         schema_names_loaded = true;
     }
     return cached_schema_names;
