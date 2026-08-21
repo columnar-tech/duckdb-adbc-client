@@ -104,7 +104,7 @@ To read data through ADBC you can call the `read_adbc` table function by providi
 
 ```sql
 -- Install the extension
-D INSTALL adbc FROM 'https://columnar-tech.github.io/duckdb-adbc-client';
+D INSTALL adbc FROM community;
 -- Load it
 D LOAD adbc;
 -- Read from the ADBC database using read_adbc
