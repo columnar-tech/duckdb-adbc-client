@@ -120,7 +120,7 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
 
     auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
     auto &context = transaction.GetContext();
-    auto table_name = info.Base().table;
+    auto table_name = info.Base().GetTableName();
 
     // Guard against OR REPLACE qualifier
     if (info.Base().on_conflict == OnCreateConflict::REPLACE_ON_CONFLICT) {
@@ -150,7 +150,8 @@ optional_ptr<CatalogEntry> AdbcSchemaEntry::CreateTable(CatalogTransaction trans
             column_types.push_back(col.GetType());
             column_names.push_back(col.GetName().GetIdentifierName());
         }
-        auto internal_schema = adbc_catalog.GetInternalSchemaName(info.Base().schema.GetIdentifierName());
+        auto internal_schema =
+            adbc_catalog.GetInternalSchemaName(info.Base().GetQualifiedName().Schema().GetIdentifierName());
 
 
         ArrowConverter::ToArrowSchema(schema.get(), column_types, column_names, properties);

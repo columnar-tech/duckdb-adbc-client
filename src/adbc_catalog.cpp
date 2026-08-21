@@ -23,6 +23,7 @@
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/planner/operator/logical_create_table.hpp"
 #include "duckdb/planner/operator/logical_insert.hpp"
+#include "duckdb/execution/physical_plan_generator.hpp"
 #include <memory>
 
 namespace duckdb {
@@ -201,8 +202,8 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
         column_types.push_back(col.GetType());
         column_names.push_back(col.GetName().GetIdentifierName());
     }
-    auto table_name = info->Base().table.GetIdentifierName();
-    auto internal_schema = GetInternalSchemaName(info->Base().schema.GetIdentifierName());
+    auto table_name = info->Base().GetTableName().GetIdentifierName();
+    auto internal_schema = GetInternalSchemaName(info->Base().GetQualifiedName().Schema().GetIdentifierName());
     auto &insert =
         planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::CTAS);
     insert.children.push_back(plan);
@@ -376,7 +377,7 @@ SchemaCatalogEntry *AdbcCatalog::CreateCatalogEntry(const string &schema_name) {
 
     // Create and insert the entry
     CreateSchemaInfo info;
-    info.schema = Identifier(GetExternalSchemaName(schema_name));
+    info.SetSchema(Identifier(GetExternalSchemaName(schema_name)));
     auto schema_entry = make_uniq<AdbcSchemaEntry>(*this, info);
     auto ptr = schema_entry.get();
     owned_schemas[internal_schema] = std::move(schema_entry);

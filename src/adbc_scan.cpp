@@ -139,7 +139,7 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
 unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
                                               TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types,
-                                              vector<string> &names) {
+                                              vector<Identifier> &names) {
 
     // Validate that the function was provided exactly two input parameters
     if (input.inputs.size() != 2) {
@@ -160,7 +160,9 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
     auto function_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(adbc_arrow_stream_factory));
 
     // Assign the column names and types
-    names = function_data->arrow_table.GetNames();
+    for (auto &name : function_data->arrow_table.GetNames()) {
+        names.emplace_back(name);
+    }
     return_types = function_data->arrow_table.GetTypes();
     function_data->all_types = return_types;
     return function_data;

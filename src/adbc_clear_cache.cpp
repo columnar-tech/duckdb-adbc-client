@@ -19,6 +19,7 @@
 #include "adbc_catalog.hpp"
 #include "adbc_util.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
 
 namespace duckdb {
 namespace adbc {
@@ -53,7 +54,7 @@ void AdbcClearCacheFunction(ClientContext &context, TableFunctionInput &input, D
 unique_ptr<FunctionData> AdbcClearCacheBindFunction(ClientContext &context,
                                                     TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types,
-                                                    vector<string> &names) {
+                                                    vector<Identifier> &names) {
     if (!input.inputs.empty()) {
         throw BinderException("adbc_clear_cache() requires zero parameters");
     }

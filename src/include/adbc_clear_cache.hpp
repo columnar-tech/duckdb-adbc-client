@@ -25,7 +25,7 @@ void AdbcClearCacheFunction(ClientContext &context, TableFunctionInput &data, Da
 unique_ptr<FunctionData> AdbcClearCacheBindFunction(ClientContext &context,
                                                     TableFunctionBindInput &input,
                                                     vector<LogicalType> &return_types,
-                                                    vector<string> &names);
+                                                    vector<Identifier> &names);
 
 struct AdbcClearCacheFunctionData : public TableFunctionData {
     bool finished = false;

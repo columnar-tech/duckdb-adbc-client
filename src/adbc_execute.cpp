@@ -45,7 +45,7 @@ void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &input, Data
 unique_ptr<FunctionData> AdbcExecuteBindFunction(ClientContext &context,
                                                  TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types,
-                                                 vector<string> &names) {
+                                                 vector<Identifier> &names) {
 
     // Validate that the function was provided exactly two input parameters
     if (input.inputs.size() != 2) {

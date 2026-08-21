@@ -20,6 +20,7 @@
 #include "adbc_connection_pool.hpp"
 #include "duckdb/common/types/column/column_data_collection.hpp"
 #include "duckdb/execution/physical_operator.hpp"
+#include "duckdb/planner/logical_operator.hpp"
 
 namespace duckdb {
 namespace adbc {

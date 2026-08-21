@@ -26,7 +26,7 @@ void AdbcExecuteFunction(ClientContext &context, TableFunctionInput &data, DataC
 unique_ptr<FunctionData> AdbcExecuteBindFunction(ClientContext &context,
                                                  TableFunctionBindInput &input,
                                                  vector<LogicalType> &return_types,
-                                                 vector<string> &names);
+                                                 vector<Identifier> &names);
 
 class AdbcExecuteFunctionData : public TableFunctionData {
 public:

@@ -26,7 +26,7 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
 unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
                                               TableFunctionBindInput &input,
                                               vector<LogicalType> &return_types,
-                                              vector<string> &names);
+                                              vector<Identifier> &names);
 
 // A factory class that holds the ADBC connection state and produces
 // ArrowArrayStreamWrapper instances
