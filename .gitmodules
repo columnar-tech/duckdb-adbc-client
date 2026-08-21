@@ -1,10 +1,11 @@
 [submodule "duckdb"]
 	path = duckdb
 	url = https://github.com/duckdb/duckdb
-	branch = v1.4-andium
+	branch = main
 [submodule "arrow-adbc"]
 	path = arrow-adbc
 	url = https://github.com/apache/arrow-adbc.git
+	branch = maint24
 [submodule "extension-ci-tools"]
 	path = extension-ci-tools
 	url = https://github.com/duckdb/extension-ci-tools
