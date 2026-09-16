@@ -34,8 +34,7 @@ set(EXTENSION_SOURCES
     src/adbc-vendor/adbc_driver_manager_driver_loading.cpp
     src/adbc-vendor/adbc_driver_manager_profiles.cpp
     src/adbc-vendor/adbc_utils.cpp
-    src/adbc-vendor/adbc_nanoarrow.cpp
-)
+    src/adbc-vendor/adbc_nanoarrow.cpp)
 
 # DuckDB API version
 add_definitions(-DDUCKDB_EXTENSION_NAME=${EXTENSION_NAME})
@@ -44,7 +43,8 @@ add_definitions(-DDUCKDB_MINOR_VERSION=${DUCKDB_MINOR_VERSION})
 
 # Build both static and loadable extensions
 build_static_extension(${TARGET_NAME} ${EXTENSION_SOURCES})
-build_loadable_extension(${TARGET_NAME} ${LOADABLE_EXTENSION_NAME} ${EXTENSION_SOURCES})
+build_loadable_extension(${TARGET_NAME} ${LOADABLE_EXTENSION_NAME}
+                         ${EXTENSION_SOURCES})
 
 # Hide symbols for release builds
 set(CMAKE_CXX_VISIBILITY_PRESET hidden)
@@ -55,8 +55,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -s")
 
 # Install rules
 install(
-    TARGETS ${EXTENSION_NAME}
-    EXPORT "${DUCKDB_EXPORT_SET}"
-    LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
-    ARCHIVE DESTINATION "${INSTALL_LIB_DIR}"
-)
+  TARGETS ${EXTENSION_NAME}
+  EXPORT "${DUCKDB_EXPORT_SET}"
+  LIBRARY DESTINATION "${INSTALL_LIB_DIR}"
+  ARCHIVE DESTINATION "${INSTALL_LIB_DIR}")
