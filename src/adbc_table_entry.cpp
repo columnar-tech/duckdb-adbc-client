@@ -88,7 +88,11 @@ static optional_idx GetTableCardinality(Private::AdbcConnection *connection,
 }
 
 AdbcTableEntry::AdbcTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info)
-    : TableCatalogEntry(catalog, schema, info) {
+    : TableCatalogEntry(catalog, schema, info), columns(info.columns.Copy()) {
+}
+
+const ColumnList &AdbcTableEntry::GetColumns() const {
+    return columns;
 }
 
 TableFunction AdbcTableEntry::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {

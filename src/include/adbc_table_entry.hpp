@@ -27,6 +27,8 @@ class AdbcTableEntry : public TableCatalogEntry {
 public:
     AdbcTableEntry(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info);
 
+    const ColumnList &GetColumns() const override;
+
     TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 
     unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override {
@@ -45,6 +47,9 @@ public:
 
         throw NotImplementedException("UPDATE is not supported on ADBC tables");
     }
+
+private:
+    ColumnList columns;
 };
 
 } // namespace adbc
