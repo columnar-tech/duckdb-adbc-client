@@ -70,6 +70,10 @@ public:
         return schema;
     }
 
+    string GetDelimiter() const {
+        return delimiter;
+    }
+
     string GetDelimitedInternalName(const string &schema, const string &table) {
         auto quoted_schema = delimiter[0] + GetInternalSchemaName(schema) + delimiter[1];
         auto quoted_table = delimiter[0] + table + delimiter[1];

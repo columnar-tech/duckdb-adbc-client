@@ -206,8 +206,6 @@ PhysicalOperator &AdbcCatalog::PlanCreateTableAs(ClientContext &context,
     auto &insert =
         planner.Make<AdbcInsert>(op, column_types, column_names, table_name, internal_schema, pool, InsertMode::CTAS);
     insert.children.push_back(plan);
-    auto &insert_node = insert.Cast<AdbcInsert>();
-
     GetCatalogEntry(internal_schema)->Cast<AdbcSchemaEntry>().LazyLoadNewTables();
     return insert;
 }
