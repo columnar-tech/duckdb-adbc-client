@@ -16,7 +16,6 @@
 // under the License.
 
 #pragma once
-
 #include "adbc_connection_pool.hpp"
 #include "adbc_util.hpp"
 
@@ -35,9 +34,13 @@ public:
     // Create an ephemeral connection (i.e., read_adbc(...) is called directly)
     AdbcArrowStreamFactory(const string &uri, const string &query_text);
     // Use a connection from the catalog's pool (i.e., SELECT * FROM <adbc>)
-    AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection, const string &query_text);
+    AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection, const string &table, const string &delimiter);
     AdbcStatement *GetStatement();
     void ResetStatement();
+    void ApplyProjectionPushdown(const vector<string> &columns);
+    bool CanPushdownProjections() const {
+        return projection_pushdown;
+    }
 
     // Methods to override
     void GetSchema(ArrowSchema &schema) override;
@@ -46,6 +49,9 @@ public:
 private:
     unique_ptr<AdbcPooledConnection> connection;
     string query_text;
+    string table;
+    string delimiter;
+    bool projection_pushdown = false;
     Handle<Private::AdbcStatement> statement;
 };
 
@@ -56,10 +62,8 @@ public:
     // Pass the factory and the factory function that creates an ArrowArrayStream
     AdbcArrowScanFunctionData(ClientContext &context, shared_ptr<AdbcArrowStreamFactory> factory);
 
-private:
-    shared_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
-
 public:
+    shared_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
     optional_idx cardinality;
 };
 

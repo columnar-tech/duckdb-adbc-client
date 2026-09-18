@@ -47,9 +47,10 @@ CatalogEntry *AdbcSchemaEntry::GetOrCreateTableEntryInternal(ClientContext &cont
         auto &adbc_catalog = catalog.Cast<AdbcCatalog>();
 
         // Bind a SQL statement and use ADBC to retrieve the metadata for the table
-        string sql = "SELECT * FROM  " + adbc_catalog.GetDelimitedInternalName(name.GetIdentifierName(), table_name);
-
-        auto factory = make_uniq<AdbcArrowStreamFactory>(adbc_catalog.GetPooledConnection(), sql);
+        auto factory = make_uniq<AdbcArrowStreamFactory>(
+            adbc_catalog.GetPooledConnection(),
+            adbc_catalog.GetDelimitedInternalName(name.GetIdentifierName(), table_name),
+            adbc_catalog.GetDelimiter());
         auto bind_data = make_uniq<AdbcArrowScanFunctionData>(context, std::move(factory));
 
         auto col_names = bind_data->arrow_table.GetNames();

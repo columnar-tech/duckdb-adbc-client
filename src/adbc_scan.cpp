@@ -25,13 +25,45 @@ namespace adbc {
 using namespace Private;
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri, const string &query_text)
-    : ArrowScanFactory(), connection(AdbcConnectionPool::GetEphemeralConnection(uri)), query_text(query_text),
+
+    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), query_text(query_text), table(), delimiter(),
       statement(connection->GetConnection().MakeStatement(query_text)) {
 }
 
-AdbcArrowStreamFactory::AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> conn, const string &query_text)
-    : ArrowScanFactory(), connection(std::move(conn)), query_text(query_text),
-      statement(connection->GetConnection().MakeStatement(query_text)) {
+AdbcArrowStreamFactory::AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> conn,
+                                               const string &table,
+                                               const string &delimiter)
+    : connection(std::move(conn)), query_text("SELECT * FROM " + table), table(table), delimiter(delimiter),
+      projection_pushdown(true), statement(connection->GetConnection().MakeStatement(query_text)) {
+}
+
+void AdbcArrowStreamFactory::ApplyProjectionPushdown(const vector<string> &columns) {
+    if (projection_pushdown) {
+        // Append quoted columns
+        string new_query_text = "SELECT ";
+
+        // Constant if there are no columns
+        if (columns.empty()) {
+            new_query_text += "1 ";
+        }
+        // Otherwise append the column names
+        else {
+            bool first = true;
+            for (auto &col : columns) {
+                if (first) {
+                    first = false;
+                } else {
+                    new_query_text += ",";
+                }
+                new_query_text += (delimiter[0] + col + delimiter[1] + ' ');
+            }
+        }
+        new_query_text += ("FROM " + table);
+
+        // Assign new query text
+        query_text = new_query_text;
+        ResetStatement();
+    }
 }
 
 AdbcStatement *AdbcArrowStreamFactory::GetStatement() {
@@ -68,6 +100,11 @@ void AdbcArrowStreamFactory::GetSchema(ArrowSchema &schema) {
 }
 
 unique_ptr<ArrowArrayStreamWrapper> AdbcArrowStreamFactory::ProduceStream(ArrowStreamParameters &parameters) {
+
+    // Apply projection pushdown
+    auto &columns = parameters.projected_columns.columns;
+    ApplyProjectionPushdown(columns);
+
     // Create the stream for the query result
     Handle<Private::AdbcError> error = {};
     ArrowArrayStream adbc_stream = {};
@@ -115,7 +152,8 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
     function_data.lines_read += output_size;
 
     // Handle the case where we don't need all of the columns
-    if (global_state.CanRemoveFilterColumns()) {
+    auto is_projected = function_data.adbc_arrow_stream_factory->CanPushdownProjections();
+    if (global_state.CanRemoveFilterColumns() && !is_projected) {
         local_state.all_columns.Reset();
         local_state.all_columns.SetChildCardinality(output_size);
 
@@ -126,7 +164,7 @@ void AdbcScanFunction(ClientContext &context, TableFunctionInput &input, DataChu
         output.ReferenceColumns(local_state.all_columns, global_state.projection_ids);
     } else {
         output.SetChildCardinality(output_size);
-        ArrowTableFunction::ArrowToDuckDB(local_state, function_data.arrow_table.GetColumns(), output, false);
+        ArrowTableFunction::ArrowToDuckDB(local_state, function_data.arrow_table.GetColumns(), output, is_projected);
     }
 
     output.Verify();

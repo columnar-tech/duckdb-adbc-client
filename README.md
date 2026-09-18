@@ -226,13 +226,13 @@ D CALL adbc_clear_cache();
 
 The ADBC extension only supports autocommit mode. In this mode, queries take effect immediately upon execution. 
 
-### Projection and Predicate Pushdown
+### Predicate Pushdown
 
-The ADBC extension does not currently perform predicate or projection pushdown for attached ADBC tables.
+The ADBC extension does not currently perform predicate pushdown for attached ADBC tables.
 
 See [Issue #1](https://github.com/columnar-tech/duckdb-adbc-client/issues/1) and [Issue #2](https://github.com/columnar-tech/duckdb-adbc-client/issues/2) for more details.
 
-To push down projections or predicates, you can directly call `read_adbc` with a SQL query.
+To push down predicates, you can directly call `read_adbc` with a SQL query.
 
 ```sql
 D USE memory;
