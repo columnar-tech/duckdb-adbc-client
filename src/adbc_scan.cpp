@@ -25,12 +25,12 @@ namespace adbc {
 using namespace Private;
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(const string &uri, const string &query_text)
-    : connection(AdbcConnectionPool::GetEphemeralConnection(uri)), query_text(query_text),
+    : ArrowScanFactory(), connection(AdbcConnectionPool::GetEphemeralConnection(uri)), query_text(query_text),
       statement(connection->GetConnection().MakeStatement(query_text)) {
 }
 
 AdbcArrowStreamFactory::AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> conn, const string &query_text)
-    : connection(std::move(conn)), query_text(query_text),
+    : ArrowScanFactory(), connection(std::move(conn)), query_text(query_text),
       statement(connection->GetConnection().MakeStatement(query_text)) {
 }
 
@@ -42,16 +42,37 @@ void AdbcArrowStreamFactory::ResetStatement() {
     statement = connection->GetConnection().MakeStatement(query_text);
 }
 
-unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, ArrowStreamParameters &parameters) {
-    // Reinterpret the factory pointer to the correct class
-    auto factory = reinterpret_cast<AdbcArrowStreamFactory *>(factory_ptr);
+void AdbcArrowStreamFactory::GetSchema(ArrowSchema &schema) {
 
+    // Retrieve and register the schema information from ADBC with DuckDB
+    Handle<Private::AdbcError> error = {};
+
+    // Try running ExecuteSchema(...)
+    auto schema_status = AdbcStatementExecuteSchema(statement.get(), &schema, error.get());
+
+    // If it's not available, then execute the query, get the schema, and cancel the query
+    if (schema_status == ADBC_STATUS_NOT_IMPLEMENTED) {
+        error.reset();
+        Handle<ArrowArrayStream> stream = {};
+        int64_t rows_affected = 0;
+        CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), stream.get(), &rows_affected, error.get()),
+                   BinderException);
+        if (stream->get_schema(stream.get(), &schema) != 0) {
+            throw BinderException("Failed to get schema from ADBC stream");
+        }
+        stream.reset();
+        ResetStatement();
+    } else {
+        CHECK_ADBC(schema_status, BinderException);
+    }
+}
+
+unique_ptr<ArrowArrayStreamWrapper> AdbcArrowStreamFactory::ProduceStream(ArrowStreamParameters &parameters) {
     // Create the stream for the query result
     Handle<Private::AdbcError> error = {};
     ArrowArrayStream adbc_stream = {};
     int64_t rows_affected;
-    CHECK_ADBC(AdbcStatementExecuteQuery(factory->GetStatement(), &adbc_stream, &rows_affected, error.get()),
-               IOException);
+    CHECK_ADBC(AdbcStatementExecuteQuery(statement.get(), &adbc_stream, &rows_affected, error.get()), IOException);
 
     // Create and return the wrapper owning the stream for DuckDB
     auto wrapper = make_uniq<ArrowArrayStreamWrapper>();
@@ -59,33 +80,9 @@ unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, 
     return wrapper;
 }
 
-AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, unique_ptr<AdbcArrowStreamFactory> factory)
-    : ArrowScanFunctionData(AdbcProduceArrowScan, reinterpret_cast<uintptr_t>(factory.get())),
-      adbc_arrow_stream_factory(std::move(factory)) {
-
-    // Retrieve and register the schema information from ADBC with DuckDB
-    Handle<Private::AdbcError> error = {};
-    auto *statement = adbc_arrow_stream_factory->GetStatement();
-    auto *schema = reinterpret_cast<ArrowSchema *>(&schema_root.arrow_schema);
-
-    // Try running ExecuteSchema(...)
-    auto schema_status = AdbcStatementExecuteSchema(statement, schema, error.get());
-
-    // If it's not available, then execute the query, get the schema, and cancel the query
-    if (schema_status == ADBC_STATUS_NOT_IMPLEMENTED) {
-        error.reset();
-        Handle<ArrowArrayStream> stream = {};
-        int64_t rows_affected = 0;
-        CHECK_ADBC(AdbcStatementExecuteQuery(statement, stream.get(), &rows_affected, error.get()), BinderException);
-        if (stream->get_schema(stream.get(), schema) != 0) {
-            throw BinderException("Failed to get schema from ADBC stream");
-        }
-        stream.reset();
-        adbc_arrow_stream_factory->ResetStatement();
-    } else {
-        CHECK_ADBC(schema_status, BinderException);
-    }
-
+AdbcArrowScanFunctionData::AdbcArrowScanFunctionData(ClientContext &context, shared_ptr<AdbcArrowStreamFactory> factory)
+    : ArrowScanFunctionData(factory), adbc_arrow_stream_factory(factory) {
+    factory->GetSchema(schema_root.arrow_schema);
     ArrowTableFunction::PopulateArrowTableSchema(context, arrow_table, schema_root.arrow_schema);
 }
 

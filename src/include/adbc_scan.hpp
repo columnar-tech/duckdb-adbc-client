@@ -30,7 +30,7 @@ unique_ptr<FunctionData> AdbcScanBindFunction(ClientContext &context,
 
 // A factory class that holds the ADBC connection state and produces
 // ArrowArrayStreamWrapper instances
-class AdbcArrowStreamFactory {
+class AdbcArrowStreamFactory : public ArrowScanFactory {
 public:
     // Create an ephemeral connection (i.e., read_adbc(...) is called directly)
     AdbcArrowStreamFactory(const string &uri, const string &query_text);
@@ -38,6 +38,10 @@ public:
     AdbcArrowStreamFactory(unique_ptr<AdbcPooledConnection> connection, const string &query_text);
     AdbcStatement *GetStatement();
     void ResetStatement();
+
+    // Methods to override
+    void GetSchema(ArrowSchema &schema) override;
+    unique_ptr<ArrowArrayStreamWrapper> ProduceStream(ArrowStreamParameters &parameters) override;
 
 private:
     unique_ptr<AdbcPooledConnection> connection;
@@ -50,10 +54,10 @@ private:
 class AdbcArrowScanFunctionData : public ArrowScanFunctionData {
 public:
     // Pass the factory and the factory function that creates an ArrowArrayStream
-    AdbcArrowScanFunctionData(ClientContext &context, unique_ptr<AdbcArrowStreamFactory> factory);
+    AdbcArrowScanFunctionData(ClientContext &context, shared_ptr<AdbcArrowStreamFactory> factory);
 
 private:
-    unique_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
+    shared_ptr<AdbcArrowStreamFactory> adbc_arrow_stream_factory;
 
 public:
     optional_idx cardinality;
