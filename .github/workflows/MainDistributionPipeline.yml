@@ -17,7 +17,7 @@ jobs:
     name: Build extension binaries (main)
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@main
     with:
-      duckdb_version: main
+      duckdb_version: v2.0-cyanoptera
       ci_tools_version: main
       extension_name: adbc
       skip_tests: true
@@ -26,7 +26,7 @@ jobs:
     name: Code Quality Check
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@main
     with:
-      duckdb_version: main
+      duckdb_version: v2.0-cyanoptera
       ci_tools_version: main
       extension_name: adbc
       format_checks: 'format;tidy'
@@ -84,6 +84,6 @@ jobs:
     uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@main
     secrets: inherit
     with:
-      duckdb_version: main
+      duckdb_version: v2.0-cyanoptera
       ci_tools_version: main
       extension_name: adbc
