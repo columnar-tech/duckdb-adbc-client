@@ -28,6 +28,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/function/scalar_function.hpp"
 #include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 namespace duckdb {
 
@@ -50,21 +51,47 @@ static void LoadInternal(ExtensionLoader &loader) {
     read_adbc_function.projection_pushdown = true;
     // No support for filter pushdown
     read_adbc_function.filter_pushdown = false;
-    loader.RegisterFunction(read_adbc_function);
+
+    // Function description for read_adbc
+    CreateTableFunctionInfo read_adbc_info(read_adbc_function);
+    FunctionDescription read_adbc_desc;
+    read_adbc_desc.parameter_names = {"adbc_connection_profile_uri", "sql_query"};
+    read_adbc_desc.description = "Executes a SQL query against a remote database via an ADBC connection profile URI "
+                                 "and returns the result as a DuckDB table.";
+    read_adbc_desc.examples = {"SELECT * FROM read_adbc('profile://mydb', 'SELECT * FROM games');"};
+    read_adbc_desc.categories = {"adbc"};
+    read_adbc_info.descriptions.push_back(read_adbc_desc);
+    loader.RegisterFunction(std::move(read_adbc_info));
 
     // Construct an adbc_execute(uri, query) function to perform DML via ADBC
     TableFunction adbc_execute_function("adbc_execute",
                                         {LogicalType::VARCHAR, LogicalType::VARCHAR},
                                         adbc::AdbcExecuteFunction,
                                         adbc::AdbcExecuteBindFunction);
-    loader.RegisterFunction(adbc_execute_function);
+    CreateTableFunctionInfo adbc_execute_info(adbc_execute_function);
+    FunctionDescription adbc_execute_desc;
+    adbc_execute_desc.parameter_names = {"adbc_connection_profile_uri", "sql_query"};
+    adbc_execute_desc.description =
+        "Executes an SQL statement (e.g. DROP TABLE, CREATE INDEX) against a remote ADBC database.";
+    adbc_execute_desc.examples = {"CALL adbc_execute('profile://mydb', 'DROP TABLE games');"};
+    adbc_execute_desc.categories = {"adbc"};
+    adbc_execute_info.descriptions.push_back(adbc_execute_desc);
+    loader.RegisterFunction(std::move(adbc_execute_info));
 
     // Construct an adbc_clear_cache function to clear catalog metadata
     TableFunction adbc_clear_cache_function("adbc_clear_cache",
                                             {},
                                             adbc::AdbcClearCacheFunction,
                                             adbc::AdbcClearCacheBindFunction);
-    loader.RegisterFunction(adbc_clear_cache_function);
+    CreateTableFunctionInfo adbc_clear_cache_info(adbc_clear_cache_function);
+    FunctionDescription adbc_clear_cache_desc;
+    adbc_clear_cache_desc.parameter_names = {};
+    adbc_clear_cache_desc.description = "Clears DuckDB's locally cached metadata for attached ADBC databases. Forces "
+                                        "catalog and schema information to be fetched from the ADBC database.";
+    adbc_clear_cache_desc.examples = {"CALL adbc_clear_cache();"};
+    adbc_clear_cache_desc.categories = {"adbc"};
+    adbc_clear_cache_info.descriptions.push_back(adbc_clear_cache_desc);
+    loader.RegisterFunction(std::move(adbc_clear_cache_info));
 
     // Storage extension for ATTACH
     auto &config = DBConfig::GetConfig(loader.GetDatabaseInstance());
