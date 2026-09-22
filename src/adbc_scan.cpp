@@ -52,12 +52,12 @@ void AdbcArrowStreamFactory::ApplyProjectionPushdown(const vector<string> &colum
                 if (first) {
                     first = false;
                 } else {
-                    new_query_text += ",";
+                    new_query_text += ", ";
                 }
-                new_query_text += (delimiter[0] + col + delimiter[1] + ' ');
+                new_query_text += (delimiter[0] + col + delimiter[1]);
             }
         }
-        new_query_text += ("FROM " + table);
+        new_query_text += (" FROM " + table);
 
         // Assign new query text
         query_text = new_query_text;
