@@ -52,12 +52,12 @@ void AdbcArrowStreamFactory::ApplyProjectionPushdown(const vector<string> &colum
                 if (first) {
                     first = false;
                 } else {
-                    new_query_text += ",";
+                    new_query_text += ", ";
                 }
-                new_query_text += (delimiter[0] + col + delimiter[1] + ' ');
+                new_query_text += (delimiter[0] + col + delimiter[1]);
             }
         }
-        new_query_text += ("FROM " + table);
+        new_query_text += (" FROM " + table);
 
         // Assign new query text
         query_text = new_query_text;
@@ -78,7 +78,7 @@ unique_ptr<ArrowArrayStreamWrapper> AdbcProduceArrowScan(uintptr_t factory_ptr, 
     // Reinterpret the factory pointer to the correct class
     auto factory = reinterpret_cast<AdbcArrowStreamFactory *>(factory_ptr);
 
-    // TODO: Make this actually do something
+    // Apply projection pushdown
     auto &columns = parameters.projected_columns.columns;
     factory->ApplyProjectionPushdown(columns);
 
