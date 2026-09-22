@@ -53,12 +53,12 @@ void AdbcArrowStreamFactory::ApplyProjectionPushdown(const vector<string> &colum
                 if (first) {
                     first = false;
                 } else {
-                    new_query_text += ",";
+                    new_query_text += ", ";
                 }
-                new_query_text += (delimiter[0] + col + delimiter[1] + ' ');
+                new_query_text += (delimiter[0] + col + delimiter[1]);
             }
         }
-        new_query_text += ("FROM " + table);
+        new_query_text += (" FROM " + table);
 
         // Assign new query text
         query_text = new_query_text;
@@ -75,7 +75,6 @@ void AdbcArrowStreamFactory::ResetStatement() {
 }
 
 void AdbcArrowStreamFactory::GetSchema(ArrowSchema &schema) {
-
     // Retrieve and register the schema information from ADBC with DuckDB
     Handle<Private::AdbcError> error = {};
 
