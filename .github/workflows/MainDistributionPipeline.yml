@@ -15,24 +15,24 @@ concurrency:
 jobs:
   duckdb-build-v1-5:
     name: Build extension binaries (v1.5)
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5.6
     with:
-      duckdb_version: v1.5.4       
-      ci_tools_version: v1.5-variegata
+      duckdb_version: v1.5.6       
+      ci_tools_version: v1.5.6
       extension_name: adbc
       skip_tests: true
 
   code-quality-check:
     name: Code Quality Check
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_code_quality.yml@v1.5.6
     with:
-      duckdb_version: v1.5.4      
-      ci_tools_version: v1.5-variegata
+      duckdb_version: v1.5.6      
+      ci_tools_version: v1.5.6
       extension_name: adbc
       format_checks: 'format;tidy'
 
   test:
-    name: Test v1.5.4 on ${{ matrix.os }}
+    name: Test v1.5.6 on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -58,7 +58,7 @@ jobs:
       - name: Build
         shell: bash
         env:
-          DUCKDB_VERSION: v1.5.4   
+          DUCKDB_VERSION: v1.5.6   
         run: GEN=ninja make release
       - name: Run tests (Linux/macOS)
         if: runner.os != 'Windows'
@@ -74,9 +74,9 @@ jobs:
     name: Deploy extension binaries (v1.5)
     needs: [duckdb-build-v1-5, test]
     if: github.ref == 'refs/heads/v1.5' || github.event_name == 'workflow_dispatch'
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5-variegata
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_deploy.yml@v1.5.6
     secrets: inherit
     with:
-      duckdb_version: v1.5.4       
-      ci_tools_version: v1.5-variegata
+      duckdb_version: v1.5.6       
+      ci_tools_version: v1.5.6
       extension_name: adbc
