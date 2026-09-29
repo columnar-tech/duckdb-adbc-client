@@ -387,7 +387,7 @@ bool AdbcCatalog::ContainsAdbcReads(PhysicalOperator &op) {
     // If this operator is a read_adbc function
     if (op.type == PhysicalOperatorType::TABLE_SCAN) {
         auto &table_scan = op.Cast<PhysicalTableScan>();
-        if (table_scan.function.name == "read_adbc") {
+        if (table_scan.function.GetName() == "read_adbc") {
             return true;
         }
     }
