@@ -56,11 +56,42 @@ jobs:
         run: |
           dbc install sqlite
           dbc install datafusion
-      - name: Build
+
+      # Windows: build with MSVC. Without this, CMake picks MinGW GCC from PATH
+      # (it prefers gcc over cl), and a MinGW release build of DuckDB crashes at
+      # startup (DuckCatalog::CreateSchema, 0xC0000005).
+      - name: Set up MSVC (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build (Linux/macOS)
+        if: runner.os != 'Windows'
         shell: bash
         env:
           DUCKDB_VERSION: ${{ matrix.duckdb_version }}
         run: GEN=ninja make release
+
+      - name: Build (Windows, MSVC)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          DUCKDB_VERSION: ${{ matrix.duckdb_version }}
+          CC: cl
+          CXX: cl
+        run: GEN=ninja make release
+
+      - name: Verify Windows compiler is MSVC
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $line = Select-String -Path .\build\release\CMakeCache.txt -Pattern '^CMAKE_CXX_COMPILER:[A-Z]+=(.+)$'
+          $cxx = $line.Matches[0].Groups[1].Value
+          "CXX compiler used: $cxx"
+          if ($cxx -notmatch 'cl(\.exe)?$') {
+            Write-Error "Expected MSVC (cl.exe) but the build used: $cxx"
+            exit 1
+          }
+
       - name: Run tests (Linux/macOS)
         if: runner.os != 'Windows'
         shell: bash
@@ -70,11 +101,14 @@ jobs:
           else
             export ADBC_DRIVER_PATH="$HOME/.config/adbc/drivers"
           fi
-          python3 ./duckdb/scripts/ci/run_tests.py ./build/release/test/unittest "test/*" --workers=1         
+          python3 ./duckdb/scripts/ci/run_tests.py ./build/release/test/unittest "test/*" --workers=1
+
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          # dbc installs Windows drivers under %APPDATA% (Roaming)
+          $env:ADBC_DRIVER_PATH = "$env:APPDATA\ADBC\Drivers"
           & .\build\release\test\unittest.exe test\
 
   deploy-main:
